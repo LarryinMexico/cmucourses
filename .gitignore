@@ -1,5 +1,4 @@
 .idea
-.env
 
 # Local Netlify folder
 .netlify
@@ -14,3 +13,18 @@ node_modules/
 .next
 out
 .DS_Store
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Logs and coverage
+coverage/
+*.log
+
+# Agent scratch files (plans, notes, generated reports)
+plan.md
+notes.md
+.claude/settings.local.json
+.claude/.cc-writes/
