@@ -67,6 +67,25 @@ const getNewUserSchedule = (courseIDs: string[], id: string): UserSchedule => {
   };
 };
 
+/**
+ * Resolves the active schedule, rebuilding schedules that were persisted
+ * before courseSessions existed. Returns undefined when nothing is active, or
+ * when active points at a schedule that is no longer saved.
+ */
+const getActiveSchedule = (
+  state: UserSchedulesState
+): UserSchedule | undefined => {
+  if (state.active === null) return undefined;
+  const schedule = state.saved[state.active];
+  if (!schedule) return undefined;
+  if (!schedule.courseSessions) {
+    const rebuilt = getNewUserSchedule(schedule.courses, state.active);
+    state.saved[state.active] = rebuilt;
+    return rebuilt;
+  }
+  return schedule;
+};
+
 export const userSchedulesSlice = createSlice({
   name: "userSchedules",
   initialState,
@@ -75,75 +94,52 @@ export const userSchedulesSlice = createSlice({
       state.active = action.payload;
     },
     addCourseToActiveSchedule: (state, action: PayloadAction<string>) => {
-      if (state.active === null) {
+      if (state.active === null || !state.saved[state.active]) {
         const newId = uuidv4();
         state.saved[newId] = getNewUserSchedule([], newId);
         state.active = newId;
       }
-      state.saved[state.active].courses = addToSet(
-        state.saved[state.active].courses,
-        action.payload
-      );
-      state.saved[state.active].selected = addToSet(
-        state.saved[state.active].selected,
-        action.payload
-      );
 
-      if (!state.saved[state.active].courseSessions)
-        state.saved[state.active] = getNewUserSchedule(
-          state.saved[state.active].courses,
-          state.active
-        );
-      state.saved[state.active].courseSessions[action.payload] = {
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+
+      schedule.courses = addToSet(schedule.courses, action.payload);
+      schedule.selected = addToSet(schedule.selected, action.payload);
+      schedule.courseSessions[action.payload] = {
         Lecture: "",
         Section: "",
-        Color: getCalendarColor(state.saved[state.active].numColors),
+        Color: getCalendarColor(schedule.numColors),
       };
-      state.saved[state.active].numColors += 1;
+      schedule.numColors += 1;
     },
     removeCourseFromActiveSchedule: (state, action: PayloadAction<string>) => {
-      if (state.active === null) return;
-      state.saved[state.active].courses = removeFromSet(
-        state.saved[state.active].courses,
-        action.payload
-      );
-      state.saved[state.active].selected = removeFromSet(
-        state.saved[state.active].selected,
-        action.payload
-      );
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
 
-      if (!state.saved[state.active].courseSessions)
-        state.saved[state.active] = getNewUserSchedule(
-          state.saved[state.active].courses,
-          state.active
-        );
-      else delete state.saved[state.active].courseSessions[action.payload];
+      schedule.courses = removeFromSet(schedule.courses, action.payload);
+      schedule.selected = removeFromSet(schedule.selected, action.payload);
+      delete schedule.courseSessions[action.payload];
     },
     selectCourseInActiveSchedule: (state, action: PayloadAction<string>) => {
-      if (state.active === null) return;
-      state.saved[state.active].selected = addToSet(
-        state.saved[state.active].selected,
-        action.payload
-      );
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.selected = addToSet(schedule.selected, action.payload);
     },
     deselectCourseInActiveSchedule: (state, action: PayloadAction<string>) => {
-      if (state.active === null) return;
-      state.saved[state.active].selected = removeFromSet(
-        state.saved[state.active].selected,
-        action.payload
-      );
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.selected = removeFromSet(schedule.selected, action.payload);
     },
     toggleSelectedInActiveSchedule: (state) => {
-      if (state.active === null) return;
-      if (state.saved[state.active].selected.length > 0) {
-        state.saved[state.active].selected = [];
-      } else {
-        state.saved[state.active].selected = state.saved[state.active].courses;
-      }
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.selected =
+        schedule.selected.length > 0 ? [] : [...schedule.courses];
     },
     setActiveScheduleCourses: (state, action: PayloadAction<string[]>) => {
-      if (state.active === null) return;
-      state.saved[state.active].courses = action.payload;
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.courses = action.payload;
     },
     createEmptySchedule: (state) => {
       const newId = uuidv4();
@@ -160,28 +156,18 @@ export const userSchedulesSlice = createSlice({
       delete state.saved[action.payload];
       if (state.active === action.payload) {
         const scheduleIDs = Object.keys(state.saved);
-        if (scheduleIDs.length === 0) {
-          state.active = null;
-        } else {
-          state.active = scheduleIDs[oldIndex <= 0 ? 0 : oldIndex - 1];
-        }
+        state.active = scheduleIDs[oldIndex <= 0 ? 0 : oldIndex - 1] ?? null;
       }
     },
     updateActiveScheduleName: (state, action: PayloadAction<string>) => {
-      if (state.active !== null) {
-        state.saved[state.active].name = action.payload;
-      }
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.name = action.payload;
     },
     updateActiveScheduleSemester: (state, action: PayloadAction<Session>) => {
-      if (!state.saved[state.active].courseSessions)
-        state.saved[state.active] = getNewUserSchedule(
-          state.saved[state.active].courses,
-          state.active
-        );
-
-      if (state.active !== null) {
-        state.saved[state.active].session = action.payload;
-      }
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.session = action.payload;
     },
     updateActiveScheduleCourseSession: (
       state,
@@ -191,59 +177,60 @@ export const userSchedulesSlice = createSlice({
         session: string;
       }>
     ) => {
-      if (state.active !== null) {
-        state.saved[state.active].courseSessions[action.payload.courseID][
-          action.payload.sessionType
-        ] = action.payload.session;
-      }
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+
+      const courseSession = schedule.courseSessions[action.payload.courseID];
+      if (!courseSession) return;
+      courseSession[action.payload.sessionType] = action.payload.session;
     },
     setHoverSession: (
       state,
       action: PayloadAction<{ courseID: string; [sessionType: string]: string }>
     ) => {
-      if (state.active !== null) {
-        state.saved[state.active].hoverSession = action.payload;
-      }
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.hoverSession = action.payload;
     },
     clearHoverSession: (state) => {
-      if (state.active !== null) {
-        state.saved[state.active].hoverSession = undefined;
-      }
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.hoverSession = undefined;
     },
   },
 });
 
+const selectActiveSchedule = (state: RootState): UserSchedule | undefined => {
+  if (state.schedules.active === null) return undefined;
+  return state.schedules.saved[state.schedules.active];
+};
+
 export const selectCoursesInActiveSchedule = (state: RootState): string[] => {
-  if (state.schedules.active === null) return [];
-  return state.schedules.saved[state.schedules.active].courses;
+  return selectActiveSchedule(state)?.courses ?? [];
 };
 
 export const selectSelectedCoursesInActiveSchedule = (
   state: RootState
 ): string[] => {
-  if (state.schedules.active === null) return [];
-  return state.schedules.saved[state.schedules.active].selected;
+  return selectActiveSchedule(state)?.selected ?? [];
 };
 
 export const selectSessionInActiveSchedule = (state: RootState): string => {
-  if (state.schedules.active === null) return "";
-  const session = state.schedules.saved[state.schedules.active].session;
-  if (session?.semester === "") return "";
+  const session = selectActiveSchedule(state)?.session;
+  if (!session || session.semester === "") return "";
   return sessionToString(session);
 };
 
 export const selectCourseSessionsInActiveSchedule = (
   state: RootState
 ): CourseSessions => {
-  if (state.schedules.active === null) return {};
-  return state.schedules.saved[state.schedules.active].courseSessions;
+  return selectActiveSchedule(state)?.courseSessions ?? {};
 };
 
 export const selectHoverSessionInActiveSchedule = (
   state: RootState
 ): { courseID: string; [sessionType: string]: string } | undefined => {
-  if (state.schedules.active === null) return undefined;
-  return state.schedules.saved[state.schedules.active].hoverSession;
+  return selectActiveSchedule(state)?.hoverSession;
 };
 
 export const reducer = userSchedulesSlice.reducer;

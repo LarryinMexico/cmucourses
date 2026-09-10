@@ -1,5 +1,5 @@
 import axios from "axios";
-import { FCE } from "~/types";
+import { FCE } from "~/app/types";
 import { GetToken } from "@clerk/types";
 import { useQueries, useQuery, keepPreviousData } from "@tanstack/react-query";
 import { STALE_TIME } from "~/app/constants";
@@ -73,7 +73,7 @@ export const useFetchFCEInfosByCourse = (
       return result.reduce((acc, { data }) => {
         if (data) acc.push(data);
         return acc;
-      }, [] as FCE[]);
+      }, [] as { courseID: string; fces: FCE[] }[]);
     },
   });
 };
