@@ -20,14 +20,14 @@ const InstructorFilter = ({ courseID }: Props) => {
     (state) => state.user.fceAggregation.filters.instructors
   );
   const { data: { fces } = {} } = useFetchFCEInfoByCourse(courseID);
-  const instructors = getUnique(fces?.map((fce) => fce.instructor).sort());
+  const instructors = getUnique(fces?.map((fce) => fce.instructor).sort() ?? []);
 
   useEffect(() => {
     dispatch(
       userSlice.actions.setFilters({
         type: "instructors",
         courses: [],
-        instructors: getUnique(fces?.map((fce) => fce.instructor).sort()),
+        instructors: getUnique(fces?.map((fce) => fce.instructor).sort() ?? []),
       })
     );
   }, [fces, dispatch]);
@@ -76,7 +76,7 @@ const InstructorFilter = ({ courseID }: Props) => {
                   setQuery(query + " science");
                 } else if (e.key === "Tab") {
                   const instructor = instructors?.filter(searchInstructors)[0];
-                  if (!filteredInstructors.includes(instructor)) {
+                  if (instructor && !filteredInstructors.includes(instructor)) {
                     setInstructors(filteredInstructors.concat([instructor]));
                   }
                 }

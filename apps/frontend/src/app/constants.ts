@@ -1,6 +1,15 @@
-import { Semester } from "./types";
+import { CountedSemester, Semester } from "./types";
 
-export const SEMESTERS_COUNTED: Semester[] = ["spring", "summer", "fall"];
+export const SEMESTERS_COUNTED: CountedSemester[] = [
+  "spring",
+  "summer",
+  "fall",
+];
+
+export const isCountedSemester = (
+  semester: Semester
+): semester is CountedSemester =>
+  (SEMESTERS_COUNTED as Semester[]).includes(semester);
 
 export type Department = { name: string; shortName: string; prefix: string };
 
@@ -116,13 +125,13 @@ export const DEPARTMENTS: Department[] = [
 ];
 
 export const DEPARTMENT_MAP_NAME: { [name: string]: Department } =
-  DEPARTMENTS.reduce(function (map, obj) {
+  DEPARTMENTS.reduce<{ [name: string]: Department }>(function (map, obj) {
     map[obj.name] = obj;
     return map;
   }, {});
 
 export const DEPARTMENT_MAP_SHORTNAME: { [name: string]: Department } =
-  DEPARTMENTS.reduce(function (map, obj) {
+  DEPARTMENTS.reduce<{ [name: string]: Department }>(function (map, obj) {
     map[obj.shortName] = obj;
     return map;
   }, {});

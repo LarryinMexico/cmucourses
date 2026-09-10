@@ -65,7 +65,7 @@ const DepartmentFilter = () => {
                     key={department}
                     className="flex items-center gap-1 rounded px-2 py-0.5 text-blue-800 bg-blue-50"
                   >
-                    <span>{getDepartmentByName(department).shortName}</span>
+                    <span>{getDepartmentByName(department)?.shortName}</span>
                     <XMarkIcon
                       className="h-3 w-3 cursor-pointer"
                       onClick={(e) => {
@@ -90,7 +90,8 @@ const DepartmentFilter = () => {
                   query.length === 0 &&
                   names.length > 0
                 ) {
-                  deleteDepartment(names[names.length - 1]);
+                  const last = names[names.length - 1];
+                  if (last) deleteDepartment(last);
                 } else if (e.key === " ") {
                   dispatch(
                     filtersSlice.actions.updateDepartmentsQuery(
@@ -99,8 +100,8 @@ const DepartmentFilter = () => {
                   );
                 } else if (e.key === "Tab") {
                   const department =
-                    DEPARTMENTS.filter(searchDepartments)[0].name;
-                  if (!names.includes(department)) {
+                    DEPARTMENTS.filter(searchDepartments)[0]?.name;
+                  if (department && !names.includes(department)) {
                     setDepartments(names.concat([department]));
                   }
                 }

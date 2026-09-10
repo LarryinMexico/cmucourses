@@ -28,6 +28,7 @@ export const sessionToString = (sessionInfo: Session | FCE | Schedule) => {
   if (!sessionInfo) return "";
 
   const semester = sessionInfo?.semester || "";
+  if (semester === "") return "";
 
   const sessionStrings = {
     "summer one": "Summer One",
@@ -53,6 +54,7 @@ export const sessionToShortString = (sessionInfo: Session | FCE | Schedule) => {
   if (!sessionInfo) return "";
 
   const semester = sessionInfo?.semester || "";
+  if (semester === "") return "";
 
   const sessionStrings = {
     "summer one": "M1",

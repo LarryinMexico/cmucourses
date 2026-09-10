@@ -85,7 +85,7 @@ const CourseFilter = ({ name }: Props) => {
                   setQuery(query + " science");
                 } else if (e.key === "Tab") {
                   const course = courses?.filter(searchCourses)[0];
-                  if (!filteredCourses.includes(course)) {
+                  if (course && !filteredCourses.includes(course)) {
                     setCourses(filteredCourses.concat([course]));
                   }
                 }

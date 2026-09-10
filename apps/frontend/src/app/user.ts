@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { addToSet, removeFromSet } from "./utils";
-import { CAL_VIEW, SCHED_VIEW, SEMESTERS_COUNTED } from "./constants";
+import { CAL_VIEW, SCHED_VIEW, isCountedSemester } from "./constants";
 import { Semester } from "./types";
 
 export interface UserState {
@@ -100,7 +100,7 @@ export const userSlice = createSlice({
       state,
       action: PayloadAction<{ semester: Semester; value: boolean }>
     ) => {
-      if (!SEMESTERS_COUNTED.includes(action.payload.semester)) return;
+      if (!isCountedSemester(action.payload.semester)) return;
       state.fceAggregation.counted[action.payload.semester] =
         action.payload.value;
     },

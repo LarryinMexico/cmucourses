@@ -1,4 +1,5 @@
 import { Course, FCE } from "./types";
+import { isCountedSemester } from "./constants";
 import {
   compareSessions,
   roundTo,
@@ -74,7 +75,7 @@ export const filterFCEs = (
   extraFilters: boolean = false
 ) => {
   const sortedFCEs = fces
-    .filter((fce) => options.counted[fce.semester])
+    .filter((fce) => isCountedSemester(fce.semester) && options.counted[fce.semester])
     .sort(compareSessions);
   let result: FCE[] = [];
   const encounteredSemesters = new Set();

@@ -6,7 +6,7 @@ import { filtersSlice } from "~/app/filters";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import { classNames } from "~/app/utils";
 
-const LevelRange = (start, end) => (
+const LevelRange = (start: number, end: number) => (
   <>
     <span className="inline-block">
       {start}
@@ -131,6 +131,7 @@ const LevelFilter = () => {
 
       // find the newly added level
       const delta = newListboxValue.filter((x) => !listboxValue.includes(x))[0];
+      if (!delta) return;
       for (const idx of delta) {
         newLevels[idx] = true; // update boolean array
       }
@@ -141,7 +142,7 @@ const LevelFilter = () => {
       // we removed a level
       // find the removed level
       const delta = listboxValue.filter((x) => !newListboxValue.includes(x))[0];
-      removeLevel(delta);
+      if (delta) removeLevel(delta);
     }
   };
 

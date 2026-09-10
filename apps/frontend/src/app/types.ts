@@ -1,4 +1,7 @@
-export type Semester = "fall" | "spring" | "summer" | "";
+/** A real semester. FCE aggregation only ever counts these three. */
+export type CountedSemester = "fall" | "spring" | "summer";
+/** A semester slot, which may still be unset (""). */
+export type Semester = CountedSemester | "";
 export type SummerSession =
   | "summer one"
   | "summer two"
