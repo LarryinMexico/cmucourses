@@ -200,6 +200,7 @@ const CourseCombobox = ({
                   />
                   {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                     const course = filteredCourses[virtualRow.index];
+                    if (!course) return null;
                     return (
                       <li
                         key={course.courseID}
@@ -260,7 +261,7 @@ const ScheduleSearch = () => {
             <PencilSquareIcon className="mr-2 h-4 w-4" />
             <input
               className="bg-white"
-              value={savedSchedules[active].name}
+              value={savedSchedules[active]?.name ?? ""}
               onChange={(e) =>
                 dispatch(
                   userSchedulesSlice.actions.updateActiveScheduleName(

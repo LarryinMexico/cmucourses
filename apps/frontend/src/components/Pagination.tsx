@@ -16,6 +16,8 @@ export const Pagination = ({
       currentPage={currentPage}
       setCurrentPage={setCurrentPage}
       totalPages={totalPages}
+      edgePageCount={2}
+      middlePagesSiblingCount={1}
       className="text-gray-600 flex w-full justify-center"
     >
       <HeadlessPagination.PrevButton className="">

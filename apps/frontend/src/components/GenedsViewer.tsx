@@ -129,6 +129,7 @@ const GenedsViewer = () => {
         <Combobox
           value={selectedSchool}
           onChange={(payload) => {
+            if (payload === null) return;
             dispatch(userSlice.actions.setSelectedSchool(payload));
             dispatch(userSlice.actions.setSelectedTags([]));
             setSearchQuery("");

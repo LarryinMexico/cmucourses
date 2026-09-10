@@ -25,8 +25,10 @@ const CoursePage = () => {
   const coursesToShow: string[] = useMemo(() => {
     const pageCourses = docs?.map((doc) => doc.courseID) || [];
 
-    if (page === 1 && exactResultsCourses.length > 0) {
-      if (pageCourses.includes(exactResultsCourses[0])) {
+    const topExactResult = exactResultsCourses[0];
+
+    if (page === 1 && topExactResult) {
+      if (pageCourses.includes(topExactResult)) {
         const filteredCourses = pageCourses.filter(
           (courseID) => !exactResultsCourses.includes(courseID)
         );
