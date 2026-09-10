@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 import * as dates from "date-arithmetic";
 import TimeGrid from "react-big-calendar/lib/TimeGrid";
 import Toolbar from "react-big-calendar/lib/Toolbar";
-import style from "react-big-calendar/lib/css/react-big-calendar.css";
+import "react-big-calendar/lib/css/react-big-calendar.css";
 import moment from "moment";
 import { useAppSelector } from "~/app/hooks";
 import { Course, Time } from "~/app/types";
@@ -36,7 +36,6 @@ function Week({
 
   return (
     <TimeGrid
-      style={style}
       date={date}
       eventOffset={15}
       localizer={localizer}
@@ -74,7 +73,11 @@ Week.range = (date: Date, p: { localizer: DateLocalizer }) => {
 
 Week.title = () => "Week";
 
-class CustomToolbar extends Toolbar {
+// react-big-calendar's ViewStatic contract. Week.range is a fixed week, so
+// there is nothing to navigate to.
+Week.navigate = (date: Date) => date;
+
+class CustomToolbar extends Toolbar<Event> {
   render() {
     return "";
   }
@@ -301,8 +304,7 @@ const ScheduleCalendar = ({ courseIDs }: Props) => {
         defaultView="week"
         events={events}
         localizer={localizer}
-        style={style}
-        views={views}
+          views={views}
         components={components}
         formats={formats}
         eventPropGetter={eventPropGetter}

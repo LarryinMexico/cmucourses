@@ -254,7 +254,7 @@ export function addToSet<T>(arr: T[], item: T): T[] {
 export function toNameCase(name: string): string {
   // Eventually we should get rid of this function altogether by
   // getting the proper names from the Directory, but this will do for now.
-  return namecase(name) as string;
+  return namecase(name);
 }
 
 export function getUnique<T>(arr: T[]): T[] {

@@ -94,7 +94,7 @@ const columns: ColumnDef<FinalExamRow>[] = [
             const formattedCourseCode = formatCourseCode(courseCode);
             const id = `finals-table-${courseCode}`;
 
-            return <><Link data-tooltip-id={id} href={`/course/${formattedCourseCode}`}>{formattedCourseCode}</Link><GetTooltip id={id} children={<div><b>{row.original.name as string}</b> <br />{row.original.desc as string}</div>} /></>;
+            return <><Link data-tooltip-id={id} href={`/course/${formattedCourseCode}`}>{formattedCourseCode}</Link><GetTooltip id={id} children={<div><b>{row.original.name}</b> <br />{row.original.desc}</div>} /></>;
         },
     },
     {
@@ -176,7 +176,7 @@ export default function FinalsViewer() {
     const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-        file.text().then((text) => {
+        void file.text().then((text) => {
             const calData = ICAL.parse(text);
             const newScheduleData: { code: string; section: string }[] = [];
             for (const entry of calData[2]) {
