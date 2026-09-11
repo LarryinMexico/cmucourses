@@ -1,7 +1,8 @@
 import morgan from "morgan";
 import express, { ErrorRequestHandler } from "express";
 import cors from "cors";
-import { isUser } from "~/controllers/user";
+import { isUser, requireUser } from "~/controllers/user";
+import { getProfile, patchProfile } from "~/controllers/profile";
 import { getAllCourses, getCourseByID, getCourses, getFilteredCourses, getRequisites } from "~/controllers/courses";
 import { getFCEs } from "~/controllers/fces";
 import { getInstructors } from "~/controllers/instructors";
@@ -32,6 +33,10 @@ app.route("/schedules").get(getSchedules);
 
 app.route("/geneds").get(getGeneds);
 app.route("/geneds").post(isUser, getGeneds);
+
+// The caller's own profile. POST is the read (the token travels in the body, like the other authed routes).
+app.route("/user/profile").post(requireUser, getProfile);
+app.route("/user/profile").patch(requireUser, patchProfile);
 
 // the next parameter is needed!
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

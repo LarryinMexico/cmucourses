@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
+import jwt, { JwtPayload } from "jsonwebtoken";
 
-const verifyUserToken = async (token: string) => {
+const verifyUserToken = async (token: string): Promise<JwtPayload> => {
   const pubkey = process.env.CLERK_PEM_KEY || "";
 
   const payload = jwt.verify(token, pubkey, {
@@ -21,6 +21,8 @@ const verifyUserToken = async (token: string) => {
   } else if (BACKEND_ENV === "prod" && payload.azp && payload.azp !== CLERK_LOGIN_HOST) {
     throw "Token is not valid for this host.";
   }
+
+  return payload;
 };
 
 export type IsUserReqBody<T> = T & { token: string };
@@ -34,9 +36,38 @@ export function isUser<P, ResBody, ReqBody, ReqQuery, Locals extends Record<stri
   if (process.env.AUTH_ENABLED !== "true") return next();
 
   verifyUserToken(token)
-    .then(next)
+    .then(() => next())
     .catch((e) => {
       console.log(e);
       return res.status(401).send(e);
+    });
+}
+
+export type UserLocals = { userId: string };
+
+/**
+ * Like isUser, but for routes that act on the caller's own data: it always verifies the token,
+ * even when AUTH_ENABLED is off, and exposes the Clerk user id as res.locals.userId.
+ */
+export function requireUser<P, ResBody, ReqBody, ReqQuery>(
+  req: Request<P, ResBody, IsUserReqBody<ReqBody>, ReqQuery, UserLocals>,
+  res: Response<ResBody, UserLocals>,
+  next: NextFunction
+) {
+  const token = req.body?.token;
+  if (typeof token !== "string" || token === "") {
+    res.status(401).send("No token present. Did you forget to pass in the token with the API call?" as ResBody);
+    return;
+  }
+
+  verifyUserToken(token)
+    .then((payload) => {
+      if (!payload.sub) throw "Token has no subject.";
+      res.locals.userId = payload.sub;
+      next();
+    })
+    .catch((e) => {
+      console.log(e);
+      res.status(401).send((e instanceof Error ? e.message : e) as ResBody);
     });
 }
