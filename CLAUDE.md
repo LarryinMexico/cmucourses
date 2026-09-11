@@ -80,11 +80,9 @@ The filters slice is the query key for course search: `useFetchCourseInfosByPage
 
 FCE aggregation math (weighting by `numRespondents`, dropping zero-response-rate entries, semester counting) lives client-side in `src/app/fce.ts`.
 
-Styling is Tailwind v4 via `@tailwindcss/postcss`, with a fully custom `colors` palette in `tailwind.config.ts` (no default Tailwind colors) and **nightwind** for dark mode — dark variants are generated from the light classes, so write light-mode classes only and use `nightwind`'s class toggling rather than hand-authored `dark:` variants. `prettier-plugin-tailwindcss` orders classes.
+Styling is Tailwind v4 via `@tailwindcss/postcss`, using **Tailwind's default palette**: `globals.css` has no `@config`, so `tailwind.config.ts` (its custom `colors`, `animation`, and the `nightwind` plugin) is not loaded — nightwind can't run under v4 anyway. Write light-mode classes only; dark mode is handled in `src/styles/globals.css`, which redefines the `--color-*` variables under `.dark` (mirror shades, gray→zinc, white→`#101015`) for the color families the app uses — add a family there before using a new one. `nightwind/helper` still toggles the `.dark` class, and `nightwind-prevent`/`nightwind-prevent-block` keep an element's light colors. `prettier-plugin-tailwindcss` orders classes.
 
 Profile UI lives in `src/components/profile/`: one card per section built on `ProfileSection` (draft state via `useDraft`, per-card Save), shared form controls in `fields.tsx` that reuse the existing filter/modal class strings, and `OnboardingModal` mounted in `Page.tsx` for signed-in users whose `onboardedAt` is null. Use `@heroicons/react` for icons — no emoji in the UI.
-
-Dark mode is currently broken site-wide: the built CSS contains no `.dark` rules, so toggling only flips the `<html>` class.
 
 Path alias `~/*` → `apps/frontend/src/*`.
 

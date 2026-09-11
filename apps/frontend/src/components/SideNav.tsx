@@ -58,7 +58,7 @@ const SideNavItem = ({
 
 export const SideNav = ({ activePage }: { activePage?: string }) => {
   return (
-    <div className="bg-white border-gray-100 flex flex-row justify-between gap-x-3 gap-y-10 overflow-auto border-r px-3 py-6 md:flex-col md:justify-start md:px-6 lg:items-start lg:gap-y-6 lg:pr-10 lg:pl-6">
+    <div className="bg-white border-gray-100 flex flex-row justify-between shrink-0 gap-x-3 gap-y-10 overflow-auto border-r px-6 py-6 md:flex-col md:justify-start lg:items-start lg:gap-y-6 lg:pr-10 lg:pl-6">
       <SideNavItem
         icon={MagnifyingGlassIcon}
         text="Search"
