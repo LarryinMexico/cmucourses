@@ -17,18 +17,23 @@ export const DAYS = [
   "Saturday",
 ];
 
+/** Lets an optional field be cleared back to "not set". */
+export const NONE_OPTION = { value: null, label: "None" } as const;
+
 export const DAY_OPTIONS: SelectOption<number>[] = DAYS.map((label, value) => ({
   value,
   label,
 }));
 
 export const DEGREE_OPTIONS: SelectOption<DegreeLevel | null>[] = [
+  NONE_OPTION,
   { value: "UNDERGRAD", label: "Undergraduate" },
   { value: "MASTERS", label: "Master's" },
   { value: "PHD", label: "PhD" },
 ];
 
 export const SEMESTER_OPTIONS: SelectOption<ProfileSemester | null>[] = [
+  NONE_OPTION,
   { value: "fall", label: "Fall" },
   { value: "spring", label: "Spring" },
   { value: "summer", label: "Summer" },
@@ -48,22 +53,22 @@ export const MODALITY_OPTIONS: SelectOption<Modality>[] = [
 const thisYear = new Date().getFullYear();
 
 /** Years a course could have been taken in. */
-export const PAST_YEAR_OPTIONS: SelectOption<string | null>[] = Array.from(
-  { length: 8 },
-  (_, i) => {
+export const PAST_YEAR_OPTIONS: SelectOption<string | null>[] = [
+  NONE_OPTION,
+  ...Array.from({ length: 8 }, (_, i) => {
     const year = String(thisYear + 1 - i);
     return { value: year, label: year };
-  }
-);
+  }),
+];
 
 /** Years a student could graduate in. */
-export const GRAD_YEAR_OPTIONS: SelectOption<number | null>[] = Array.from(
-  { length: 9 },
-  (_, i) => ({
+export const GRAD_YEAR_OPTIONS: SelectOption<number | null>[] = [
+  NONE_OPTION,
+  ...Array.from({ length: 9 }, (_, i) => ({
     value: thisYear - 1 + i,
     label: String(thisYear - 1 + i),
-  })
-);
+  })),
+];
 
 export const EMPTY_ACADEMIC: Academic = {
   college: null,

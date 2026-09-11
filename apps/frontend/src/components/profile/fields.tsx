@@ -75,24 +75,37 @@ export const Field = ({
   </div>
 );
 
+// The remove button sits inside the combobox button, whose pointerdown/keydown handlers toggle the
+// dropdown (and cancel the default action). Stop those events here so a press on the "x" only
+// removes the pill.
+const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
 export const Pill = ({
-  children,
+  label,
   onRemove,
 }: {
-  children: React.ReactNode;
+  label: string;
   onRemove?: () => void;
 }) => (
   <span className="flex items-center gap-1 rounded px-2 py-0.5 text-blue-800 bg-blue-50">
-    <span>{children}</span>
+    <span>{label}</span>
     {onRemove && (
-      <XMarkIcon
-        className="h-3 w-3 cursor-pointer"
+      <button
+        type="button"
+        aria-label={`Remove ${label}`}
+        title="Remove"
+        className="-mr-1 rounded p-0.5 hover:bg-blue-100"
+        onPointerDown={stop}
+        onMouseDown={stop}
+        onKeyDown={stop}
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
           onRemove();
         }}
-      />
+      >
+        <XMarkIcon className="h-3 w-3" />
+      </button>
     )}
   </span>
 );
@@ -120,15 +133,16 @@ export function Select<T extends string | number | null>({
   inline?: boolean;
 }) {
   const current = options.find((option) => option.value === value);
+  // A null value is "not set": show the placeholder even if a "None" option exists.
+  const display =
+    current && current.value !== null ? current.label : placeholder;
   return (
     <div className={classNames("relative text-gray-500 text-sm", className)}>
       <Listbox value={value} onChange={onChange}>
         <ListboxButton
           className={classNames(BUTTON_CLASS, inline ? undefined : "mt-2")}
         >
-          <span className="block truncate p-0.5">
-            {current?.label ?? placeholder}
-          </span>
+          <span className="block truncate p-0.5">{display}</span>
           <Chevron />
         </ListboxButton>
         <div className="absolute mt-1 w-full min-w-max rounded shadow-lg bg-white">
@@ -194,10 +208,9 @@ export const TaxonomyMultiSelect = ({
             {value.map((id) => (
               <Pill
                 key={id}
+                label={labelOf(id)}
                 onRemove={() => onChange(value.filter((other) => other !== id))}
-              >
-                {labelOf(id)}
-              </Pill>
+              />
             ))}
             <ComboboxInput
               className="shadow-xs flex rounded py-0.5 text-base leading-6 bg-white focus:outline-none sm:text-sm sm:leading-5"

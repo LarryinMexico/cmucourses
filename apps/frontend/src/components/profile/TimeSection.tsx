@@ -11,6 +11,9 @@ import {
 } from "./options";
 import { ProfileSection, useDraft } from "./ProfileSection";
 
+// Lets the preference be cleared back to "not set".
+const NO_PREFERENCE = { value: null, label: "No preference" } as const;
+
 const NEW_BLOCK: BusyBlock = {
   day: 1,
   begin: 9 * 60,
@@ -95,8 +98,8 @@ export const TimeSection = ({ profile }: { profile: Profile }) => {
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-500 text-sm">
         <div className="mr-2">Preferred format</div>
-        {MODALITY_OPTIONS.map(({ value, label }) => (
-          <label key={value}>
+        {[...MODALITY_OPTIONS, NO_PREFERENCE].map(({ value, label }) => (
+          <label key={String(value)}>
             <input
               type="radio"
               name="modality"

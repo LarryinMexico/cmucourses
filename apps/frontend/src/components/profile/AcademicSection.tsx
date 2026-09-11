@@ -7,19 +7,20 @@ import {
   MINORS,
   Profile,
 } from "@cmucourses/profile";
-import { Field, Select, TaxonomyMultiSelect } from "./fields";
+import { Field, Select, SelectOption, TaxonomyMultiSelect } from "./fields";
 import {
   DEGREE_OPTIONS,
   EMPTY_ACADEMIC,
   GRAD_YEAR_OPTIONS,
+  NONE_OPTION,
   SEMESTER_OPTIONS,
 } from "./options";
 import { ProfileSection, useDraft } from "./ProfileSection";
 
-const COLLEGE_OPTIONS = COLLEGES.map(({ id, label }) => ({
-  value: id as string | null,
-  label,
-}));
+const COLLEGE_OPTIONS: SelectOption<string | null>[] = [
+  NONE_OPTION,
+  ...COLLEGES.map(({ id, label }) => ({ value: id, label })),
+];
 
 /** Shared by the profile page and onboarding. `minors` is hidden in onboarding to keep it short. */
 export const AcademicFields = ({
