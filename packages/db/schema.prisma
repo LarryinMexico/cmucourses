@@ -136,3 +136,87 @@ model geneds {
   startsCounting String?
   stopsCounting  String?
 }
+
+// User profiles. Validation rules and taxonomy ids live in @cmucourses/profile.
+
+enum Modality {
+  IN_PERSON
+  REMOTE
+  HYBRID
+}
+
+enum CourseStatus {
+  TAKEN
+  IN_PROGRESS
+}
+
+enum DegreeLevel {
+  UNDERGRAD
+  MASTERS
+  PHD
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+type ProfilesAcademic {
+  college      String?
+  majors       String[]
+  minors       String[]
+  degree       DegreeLevel?
+  gradSemester String?
+  gradYear     Int?
+}
+
+type ProfilesWorkload {
+  unitsMin     Int?
+  unitsMax     Int?
+  hoursPerWeek Int?
+}
+
+type ProfilesBusyBlocks {
+  /// 0 = Sunday ... 6 = Saturday
+  day   Int
+  /// minutes after midnight
+  begin Int
+  end   Int
+  label String?
+}
+
+type ProfilesCourses {
+  courseID String
+  status   CourseStatus
+  semester String?
+  year     String?
+}
+
+type ProfilesVisibility {
+  academic Visibility @default(PRIVATE)
+  careers  Visibility @default(PRIVATE)
+  skills   Visibility @default(PRIVATE)
+  courses  Visibility @default(PRIVATE)
+}
+
+model profiles {
+  id          String               @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId String               @unique
+  displayName String?
+  bio         String?
+  /// ordered by priority
+  careers     String[]
+  skillsHave  String[]
+  skillsWant  String[]
+  academic    ProfilesAcademic?
+  workload    ProfilesWorkload?
+  modality    Modality?
+  busyBlocks  ProfilesBusyBlocks[]
+  courses     ProfilesCourses[]
+  visibility  ProfilesVisibility
+  onboardedAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([courses.courseID])
+}

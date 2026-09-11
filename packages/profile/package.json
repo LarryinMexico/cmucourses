@@ -1,0 +1,16 @@
+{
+  "name": "@cmucourses/profile",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "test": "bun test",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "bun-types": "^1.4.2"
+  }
+}
