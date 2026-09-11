@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import { LoginModal } from "./LoginModal";
+import { OnboardingModal } from "./profile/OnboardingModal";
 import { Toaster } from "react-hot-toast";
 import { SideNav } from "./SideNav";
 import Link from "./Link";
@@ -37,6 +38,7 @@ export const Page = ({ sidebar, content, activePage,title }: Props) => {
   return (
     <div className="accent-blue-600 flex flex-col md:h-screen min-h-screen">
       <LoginModal />
+      <OnboardingModal />
       <Toaster position="bottom-right" />
       <header className="sticky top-0 border-b drop-shadow bg-gray-50 border-gray-200 zinc-800 z-10">
         <Header />

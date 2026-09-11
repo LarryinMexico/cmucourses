@@ -5,7 +5,8 @@ import {
   StarIcon,
   UserCircleIcon,
   BookOpenIcon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  IdentificationIcon,
 } from "@heroicons/react/24/outline";
 import React from "react";
 import Link from "next/link";
@@ -57,7 +58,7 @@ const SideNavItem = ({
 
 export const SideNav = ({ activePage }: { activePage?: string }) => {
   return (
-    <div className="bg-white border-gray-100 flex flex-row justify-between gap-y-10 border-r px-6 py-6 md:flex-col md:justify-start lg:items-start lg:gap-y-6 lg:pr-10 lg:pl-6">
+    <div className="bg-white border-gray-100 flex flex-row justify-between gap-x-3 gap-y-10 overflow-auto border-r px-3 py-6 md:flex-col md:justify-start md:px-6 lg:items-start lg:gap-y-6 lg:pr-10 lg:pl-6">
       <SideNavItem
         icon={MagnifyingGlassIcon}
         text="Search"
@@ -100,6 +101,12 @@ export const SideNav = ({ activePage }: { activePage?: string }) => {
         link="https://forms.gle/6vPTN6Eyqd1w7pqJA"
         newTab
         active={false}
+      />
+      <SideNavItem
+        icon={IdentificationIcon}
+        text="Profile"
+        link="/profile"
+        active={activePage === "profile"}
       />
     </div>
   );
