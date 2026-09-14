@@ -31,12 +31,15 @@ Course directory navigator：幫助學生根據自己的 profile 排出最合適
 - 記錄已修/在修課程
 - （可選）存預設篩選當首頁
 
-### Career Path/Skills Flagging — 尚未開始
+### Career Path/Skills Flagging — 進行中
 
-- 課程對應職涯路徑
-- 依職涯目標推薦選修課
-- 依所選領域顯示對應技能子區塊
-- 課程對應到哪些能力
+> 已合進 `main`。設計見 `docs/superpowers/specs/2026-09-14-career-skills-mapping-and-audit.md`。對應關係是人工整理的靜態資料（`packages/profile/mapping/`），課程對應的職涯由技能交集程式推導，不需要新的 DB 或 API。初版涵蓋約 94 門課，尚待團隊審核與擴充。「Match my goals」用 `recommendCourses` 列出符合 Profile 的課並前端分頁；搜尋框可再縮小清單。
+
+- [x] 課程對應職涯路徑（`careersForCourse`，依技能交集推導）
+- [x] 依職涯目標推薦選修課（`recommendCourses` + 搜尋頁「Match my goals」）
+- [x] 課程對應到哪些能力（`skillsForCourse`）
+- [x] 課程卡片顯示對應的職涯/技能標籤（搜尋、Saved、課程詳細頁）
+- [ ] 依所選領域顯示對應技能子區塊（尚未開始）
 
 ### Schedule Builder — 尚未開始
 

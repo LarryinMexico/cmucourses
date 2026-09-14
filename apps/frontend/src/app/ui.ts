@@ -4,12 +4,15 @@ export interface UIState {
   darkMode: boolean;
   sidebarOpen: boolean;
   schedulesTopbarOpen: boolean;
+  /** When on, search lists courses from recommendCourses (profile goals), with client-side pagination. */
+  matchGoals: boolean;
 }
 
 const initialState: UIState = {
   darkMode: false,
   sidebarOpen: true,
   schedulesTopbarOpen: false,
+  matchGoals: false,
 };
 
 export const uiSlice = createSlice({
@@ -24,6 +27,9 @@ export const uiSlice = createSlice({
     },
     toggleSchedulesTopbarOpen: (state) => {
       state.schedulesTopbarOpen = !state.schedulesTopbarOpen;
+    },
+    toggleMatchGoals: (state) => {
+      state.matchGoals = !state.matchGoals;
     },
   },
 });

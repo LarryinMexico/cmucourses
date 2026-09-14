@@ -33,6 +33,9 @@ export const OnboardingModal = () => {
   const open =
     !!isSignedIn && !!profile && profile.onboardedAt === null && !dismissed;
 
+  // Overlay / Esc only hides for this session; only "Skip for now" writes completeOnboarding.
+  const dismissForSession = () => setDismissed(true);
+
   const skip = () => {
     setDismissed(true);
     update.mutate({ completeOnboarding: true });
@@ -45,7 +48,12 @@ export const OnboardingModal = () => {
 
   return (
     <Transition appear show={open} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={skip} open={open}>
+      <Dialog
+        as="div"
+        className="relative z-50"
+        onClose={dismissForSession}
+        open={open}
+      >
         <TransitionChild
           as={Fragment}
           enter="ease-out duration-300"

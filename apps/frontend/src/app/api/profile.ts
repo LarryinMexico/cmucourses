@@ -53,6 +53,17 @@ export const useFetchProfile = () => {
   });
 };
 
+/** Whether the signed-in user has set a career goal or a skill they want to learn — the minimum needed for goal-matched course recommendations to return anything. */
+export const useHasProfileGoals = (): boolean => {
+  const { isSignedIn } = useAuth();
+  const { data: profile } = useFetchProfile();
+  return (
+    !!isSignedIn &&
+    !!profile &&
+    (profile.careers.length > 0 || profile.skillsWant.length > 0)
+  );
+};
+
 /** Saves the sections present in the patch, updating the cached profile optimistically. */
 export const useUpdateProfile = () => {
   const { userId, getToken } = useAuth();
@@ -69,6 +80,8 @@ export const useUpdateProfile = () => {
       });
       return response.data;
     },
+    // Serialize profile writes so concurrent card saves don't clobber each other.
+    scope: { id: "profile" },
     onMutate: async (patch) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<Profile>(queryKey);
@@ -77,9 +90,10 @@ export const useUpdateProfile = () => {
         queryClient.setQueryData(queryKey, applyPatch(previous, parsed.data));
       return { previous };
     },
-    onError: (_error, _patch, context) => {
-      if (context?.previous)
-        queryClient.setQueryData(queryKey, context.previous);
+    onError: () => {
+      // Refetch instead of restoring a snapshot — another in-flight save may have
+      // already updated the cache past that snapshot.
+      void queryClient.invalidateQueries({ queryKey });
       showToast({
         message: "Couldn't save your profile. Please try again.",
         icon: ExclamationTriangleIcon,

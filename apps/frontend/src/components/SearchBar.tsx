@@ -14,6 +14,7 @@ import { getPillboxes } from "./filters/LevelFilter";
 import { useFetchCourseInfosByPage } from "~/app/api/course";
 import { useAuth } from "@clerk/nextjs";
 import { usePostHog } from "posthog-js/react";
+import { useMatchGoalsCourseIDs } from "~/app/matchGoals";
 
 /** Extra idle time after Redux search updates (those already debounce 300ms) before sending PostHog. */
 const POSTHOG_COURSE_SEARCH_IDLE_MS = 750;
@@ -161,10 +162,14 @@ const SearchBar = () => {
 
   useEffect(() => {
     const query = filtersSearch.trim();
-    if (query.length === 0) { return; }
+    if (query.length === 0) {
+      return;
+    }
     if (POSTHOG_COURSE_SEARCH_REQUIRE_FULL_COURSE_ID) {
       const ids = getCourseIDs(filtersSearch);
-      if (ids.length === 0) { return; }
+      if (ids.length === 0) {
+        return;
+      }
     }
     const t = window.setTimeout(() => {
       posthog?.capture("coursesearch", {
@@ -224,7 +229,10 @@ const SearchBar = () => {
     dispatch(userSlice.actions.showSchedules(e.target.checked));
   };
 
-  const { data: { totalDocs: numResults } = {} } = useFetchCourseInfosByPage();
+  const { active: goalsActive, courseIDs: goalIDs } = useMatchGoalsCourseIDs();
+  const { data: { totalDocs: searchNumResults } = {} } =
+    useFetchCourseInfosByPage({ enabled: !goalsActive });
+  const numResults = goalsActive ? goalIDs.length : searchNumResults;
 
   return (
     <>
@@ -234,7 +242,7 @@ const SearchBar = () => {
         </span>
         <input
           autoFocus
-          className="[&::-webkit-search-cancel-button]:appearance-none flex-1 py-2 pl-7 pr-7 text-xl placeholder-gray-300 bg-transparent focus:outline-none "
+          className="[&::-webkit-search-cancel-button]:appearance-none flex-1 py-2 pl-7 pr-7 text-xl placeholder-gray-300 bg-transparent focus:outline-none"
           type="search"
           value={search}
           onChange={onChange}

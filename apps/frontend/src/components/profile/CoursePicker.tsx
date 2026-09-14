@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useDeferredValue, useMemo, useState } from "react";
 import {
   Combobox,
   ComboboxButton,
@@ -7,7 +7,7 @@ import {
   ComboboxOptions,
 } from "@headlessui/react";
 import { ChevronUpDownIcon } from "@heroicons/react/24/outline";
-import { useFetchAllCourses } from "~/app/api/course";
+import { useCourseNames, useFetchAllCourses } from "~/app/api/course";
 
 const MAX_RESULTS = 50;
 
@@ -25,22 +25,44 @@ export const CoursePicker = ({
   exclude: string[];
 }) => {
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const { data: allCourses = [] } = useFetchAllCourses();
+  const { data: names } = useCourseNames();
 
-  const hyphenated = query.replace(unhyphenatedCourseCodeRegex, "$1-$2");
-  const lowered = query.toLowerCase();
-  const results = query
-    ? allCourses
-        .filter(
-          (course) =>
-            !exclude.includes(course.courseID) &&
-            (course.courseID.includes(hyphenated) ||
-              course.name.toLowerCase().includes(lowered))
-        )
-        .slice(0, MAX_RESULTS)
-    : [];
-  const nameOf = (courseID: string) =>
-    allCourses.find((course) => course.courseID === courseID)?.name ?? "";
+  const excludeSet = useMemo(() => new Set(exclude), [exclude]);
+
+  const indexed = useMemo(
+    () =>
+      allCourses.map((course) => ({
+        courseID: course.courseID,
+        nameLower: course.name.toLowerCase(),
+        name: course.name,
+      })),
+    [allCourses]
+  );
+
+  const results = useMemo(() => {
+    if (!deferredQuery) return [];
+    const hyphenated = deferredQuery.replace(
+      unhyphenatedCourseCodeRegex,
+      "$1-$2"
+    );
+    const lowered = deferredQuery.toLowerCase();
+    const matched: { courseID: string; name: string }[] = [];
+    for (const course of indexed) {
+      if (excludeSet.has(course.courseID)) continue;
+      if (
+        course.courseID.includes(hyphenated) ||
+        course.nameLower.includes(lowered)
+      ) {
+        matched.push({ courseID: course.courseID, name: course.name });
+        if (matched.length >= MAX_RESULTS) break;
+      }
+    }
+    return matched;
+  }, [deferredQuery, indexed, excludeSet]);
+
+  const nameOf = (courseID: string) => names?.get(courseID) ?? "";
 
   return (
     <div className="relative min-w-0 flex-1 text-gray-500 text-sm">

@@ -16,6 +16,7 @@ import { CourseSchedulesDetail } from "./CourseSchedulesDetail";
 import { useFetchCourseInfo } from "~/app/api/course";
 import { useFetchFCEInfoByCourse } from "~/app/api/fce";
 import { useAuth } from "@clerk/nextjs";
+import CourseTags from "./CourseTags";
 
 interface Props {
   courseID: string;
@@ -33,11 +34,12 @@ const CourseCard = ({
   const { isSignedIn } = useAuth();
   const { isPending: isCourseInfoPending, data: info } =
     useFetchCourseInfo(courseID);
-  const { isPending: isFCEInfoPending, data: { fces } = {} } =
-    useFetchFCEInfoByCourse(courseID);
+  // Don't gate the card on FCE: in the local-Clerk + public-API split setup FCE 401s
+  // and retries for seconds; name/units/schedules can still render from course info.
+  const { data: { fces } = {} } = useFetchFCEInfoByCourse(courseID);
   const options = useAppSelector((state) => state.user.fceAggregation);
 
-  if (isCourseInfoPending || isFCEInfoPending || !info) {
+  if (isCourseInfoPending || !info) {
     return <></>;
   }
 
@@ -66,6 +68,7 @@ const CourseCard = ({
             </div>
           </Link>
           <div className="text-sm text-gray-500">{info.department}</div>
+          <CourseTags courseID={info.courseID} />
         </div>
 
         <div className="col-span-3 md:col-span-2">

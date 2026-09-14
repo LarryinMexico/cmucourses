@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
 import { FCE } from "~/app/types";
 import { GetToken } from "@clerk/types";
 import { useQueries, useQuery, keepPreviousData } from "@tanstack/react-query";
@@ -6,6 +6,12 @@ import { STALE_TIME } from "~/app/constants";
 import { create, keyResolver, windowScheduler } from "@yornaath/batshit";
 import { memoize } from "lodash-es";
 import { useAuth } from "@clerk/nextjs";
+
+/** Local Clerk tokens 401 against the public FCE API; don't burn ~7s of retries. */
+const shouldRetryFCE = (failureCount: number, error: unknown) => {
+  if (isAxiosError(error) && error.response?.status === 401) return false;
+  return failureCount < 3;
+};
 
 const fetchFCEInfosByCourseBatcher = memoize(
   (isSignedIn: boolean | undefined, getToken: GetToken) => {
@@ -53,6 +59,7 @@ export const useFetchFCEInfoByCourse = (courseID: string) => {
     queryFn: () =>
       fetchFCEInfosByCourseBatcher(isSignedIn, getToken).fetch(courseID),
     staleTime: STALE_TIME,
+    retry: shouldRetryFCE,
   });
 };
 
@@ -67,6 +74,7 @@ export const useFetchFCEInfosByCourse = (
       queryFn: () =>
         fetchFCEInfosByCourseBatcher(isSignedIn, getToken).fetch(courseID),
       staleTime: STALE_TIME,
+      retry: shouldRetryFCE,
       placeholderData: { courseID, fces: [] },
     })),
     combine: (result) => {
@@ -130,6 +138,7 @@ export const useFetchFCEInfosByInstructor = (
     queryFn: () =>
       fetchFCEInfosByInstructorBatcher(isSignedIn, getToken).fetch(instructor),
     staleTime: STALE_TIME,
+    retry: shouldRetryFCE,
     placeholderData: keepPreviousData,
   });
 };

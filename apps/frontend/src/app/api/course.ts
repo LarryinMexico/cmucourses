@@ -66,7 +66,7 @@ const fetchCourseInfosByPage = async (
   return response.data;
 };
 
-export const useFetchCourseInfosByPage = () => {
+export const useFetchCourseInfosByPage = (options?: { enabled?: boolean }) => {
   const filters = useAppSelector((state) => state.filters);
 
   return useQuery({
@@ -74,6 +74,7 @@ export const useFetchCourseInfosByPage = () => {
     queryFn: () => fetchCourseInfosByPage(filters),
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
+    enabled: options?.enabled ?? true,
   });
 };
 
@@ -135,11 +136,23 @@ const fetchAllCourses = async (): Promise<FetchAllCoursesType> => {
   return response.data;
 };
 
-export const useFetchAllCourses = () => {
+export const useFetchAllCourses = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ["allCourses"],
     queryFn: fetchAllCourses,
     staleTime: STALE_TIME,
+    enabled: options?.enabled ?? true,
+  });
+};
+
+/** Same `allCourses` cache, selected into a Map so callers don't re-scan ~8k rows per render. */
+export const useCourseNames = () => {
+  return useQuery({
+    queryKey: ["allCourses"],
+    queryFn: fetchAllCourses,
+    staleTime: STALE_TIME,
+    select: (courses) =>
+      new Map(courses.map((course) => [course.courseID, course.name])),
   });
 };
 

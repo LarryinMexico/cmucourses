@@ -17,3 +17,5 @@ export const CAREERS = [
   { id: "entrepreneurship", label: "Entrepreneurship / Startups" },
   { id: "tech-policy", label: "Technology Policy" },
 ] as const satisfies readonly TaxonomyItem[];
+
+export type CareerID = (typeof CAREERS)[number]["id"];

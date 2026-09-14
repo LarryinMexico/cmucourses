@@ -39,3 +39,5 @@ export const SKILLS = [
   { id: "technical-writing", label: "Technical Writing & Communication" },
   { id: "leadership", label: "Leadership & Teamwork" },
 ] as const satisfies readonly TaxonomyItem[];
+
+export type SkillID = (typeof SKILLS)[number]["id"];

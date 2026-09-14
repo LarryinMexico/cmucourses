@@ -6,7 +6,7 @@ import {
   LIMITS,
   Profile,
 } from "@cmucourses/profile";
-import { useFetchAllCourses } from "~/app/api/course";
+import { useCourseNames } from "~/app/api/course";
 import Link from "~/components/Link";
 import { SECONDARY_BUTTON_CLASS, Select } from "./fields";
 import { PAST_YEAR_OPTIONS, SEMESTER_OPTIONS, STATUS_OPTIONS } from "./options";
@@ -51,7 +51,7 @@ const RecordFields = ({
 
 export const CoursesSection = ({ profile }: { profile: Profile }) => {
   const { draft, setDraft, dirty } = useDraft(profile.courses);
-  const { data: allCourses = [] } = useFetchAllCourses();
+  const { data: names } = useCourseNames();
   const [adding, setAdding] = useState<{
     courseID: string | null;
     status: CourseStatus;
@@ -60,8 +60,7 @@ export const CoursesSection = ({ profile }: { profile: Profile }) => {
     status: "TAKEN",
   });
 
-  const nameOf = (courseID: string) =>
-    allCourses.find((course) => course.courseID === courseID)?.name;
+  const nameOf = (courseID: string) => names?.get(courseID);
 
   const add = () => {
     if (!adding.courseID) return;
