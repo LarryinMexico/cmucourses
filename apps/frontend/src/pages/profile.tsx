@@ -71,6 +71,10 @@ const ProfileContent = () => {
     return (
       <div className="mt-6 text-center text-gray-400">
         <p>We couldn&apos;t load your profile.</p>
+        <p className="mt-1 text-xs">
+          If this sits then fails, Atlas is likely blocking this network. Add
+          your IP (or 0.0.0.0/0 for a dev cluster) under Network Access.
+        </p>
         <button
           type="button"
           className="mt-2 text-blue-600 hover:underline"

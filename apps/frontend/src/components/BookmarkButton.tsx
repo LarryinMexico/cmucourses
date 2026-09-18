@@ -39,9 +39,10 @@ const BookmarkButton = ({ courseID }: Props) => {
   return (
     <div>
       <PlusIcon
-        className="h-6 w-6 "
+        className="h-6 w-6 cursor-pointer fill-gray-500"
         data-tooltip-id={id}
         data-tooltip-place="bottom-end"
+        aria-label="Add to Saved"
       />
       <GetTooltip id={id}>
         <div className="right-0 top-full w-auto min-w-36 bg-white rounded -m-3 py-3 px-1">

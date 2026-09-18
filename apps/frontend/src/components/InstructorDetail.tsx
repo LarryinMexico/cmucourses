@@ -22,7 +22,7 @@ const InstructorDetail = ({ name, showLoading, extraFilters }: Props) => {
   );
 
   const { isSignedIn, getToken } = useAuth();
-  const { isPending: isFCEsPending, data: fces } = useFetchFCEInfosByInstructor(
+  const { data: fces } = useFetchFCEInfosByInstructor(
     name,
     isSignedIn,
     getToken
@@ -30,7 +30,9 @@ const InstructorDetail = ({ name, showLoading, extraFilters }: Props) => {
   const { isPending: isSchedulesPending, data: schedules } =
     useFetchSchedulesByInstructor(name);
 
-  if (isFCEsPending || isSchedulesPending || !fces || !schedules) {
+  // Don't wait for FCE: signed-in local Clerk tokens 401 against the public API,
+  // which used to hide every instructor card. Name + schedules can still render.
+  if (isSchedulesPending || !schedules) {
     return (
       <div
         className={
@@ -65,7 +67,7 @@ const InstructorDetail = ({ name, showLoading, extraFilters }: Props) => {
       </div>
       <div>
         <InstructorFCEDetail
-          fces={fces.fces}
+          fces={fces?.fces ?? []}
           aggregationOptions={aggregationOptions}
           extraFilters={extraFilters}
         />

@@ -22,13 +22,14 @@ const CourseList = ({ courseIDs, children }: Props) => {
 
   return (
     <div className="pt-2 pb-6 px-2 md:px-6">
-      {results.length > 0 ? (
+      {courseIDs.length === 0 ? (
+        children
+      ) : (
         <>
           <div className="mt-3 pb-2 text-sm text-gray-400">
             {courseIDs.length} Saved Courses{" "}
           </div>
           <div className="space-y-4">
-            {/* We found less courses than what we search for, so put a Loading indicator */}
             {courseIDs.length > results.length && <Loading />}
             {courseIDs.map((courseID) => (
               <CourseCard
@@ -41,8 +42,6 @@ const CourseList = ({ courseIDs, children }: Props) => {
             ))}
           </div>
         </>
-      ) : (
-        children
       )}
     </div>
   );
