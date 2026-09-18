@@ -62,11 +62,15 @@ Done:
 
 ### Personalized Schedule Builder — Not started
 
-- Generate 1-3 candidate schedules from filters + profile + career tags
+> Updated 2026-09-18 to match the latest Mural Features Decomposition board: "Apply career & skill goals" was added under Generate, and "Generate alternative options" was removed from Finalize (the team's Product Backlog board still lists the old version under V3 — the two boards are out of sync with each other, not something this file needs to track).
+
+- Generate 1-3 candidate schedules from filters + profile
+- Apply saved course preferences during generation
+- Apply career & skill goals during generation
 - Exclude times that conflict with saved availability
-- Reconcile each course's own modality override
-- Save/export the chosen schedule
-- (Optional) regenerate candidates if the user isn't satisfied
+- Compare schedule options and show why each was recommended
+- Adjust course preferences and regenerate based on changes
+- Select a preferred schedule and save/export it
 
 ### Course & Professor Insights — Not started
 
