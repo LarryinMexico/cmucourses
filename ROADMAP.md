@@ -1,65 +1,84 @@
 # Roadmap
 
-團隊目前的 feature 規劃，來源為 Mural feature decomposition board。
+The team's feature plan, sourced from the Mural feature decomposition board. Version tags (V1-V4) mirror the Mural Features Decomposition board; section names follow the Mural cards as closely as possible so this file can be cross-referenced directly against the board.
 
 ## Vision
 
-Course directory navigator：幫助學生根據自己的 profile 排出最合適的課表。
+Course directory navigator: help students build the schedule that best fits their own profile.
 
 ## V1
 
-### Class Selection Filter — 已完成（透過 clone ScottyLabs 現有網站達成）
+### Course Search & Filters — Partially done (base built by cloning the existing ScottyLabs site)
 
+Done:
 - Department dropdown
-- Course Level dropdown（undergrad/grad）
-- Unit slider（0-24）
-- Offered in（mini/semester）dropdown
-- 限定早上/下午/晚上時段
-- 尚未在 Scotty 分類中的 modality 篩選（實體/線上），會覆蓋 profile 預設值
-- 依儲存的 availability 排序或標示最適合的結果
+- Course Level dropdown (undergrad/grad)
+- Unit slider (0-24)
+- Offered in (mini/semester) dropdown
 
-### Student Profile & Persistent Memory — 進行中
+**Not done** (these three are currently in the Mural board's Done column, but there is no implementation for them in the code — Sprint Review has a rule that the team loses 1 point if something in Done turns out not to be done, so we should either implement these or move the cards out of Done before moving further down this roadmap):
+- Restrict results to morning/afternoon/evening sections
+- Modality filter (in-person/online/hybrid), which would override the profile's default
+- Sort or highlight results by best fit against saved availability
 
-> 實作於 branch `feature/student-profile`，設計見 `docs/superpowers/specs/2026-09-11-student-profile-design.md`。帳號沿用 Clerk 登入，不另建帳號系統；除下列項目外，另加入職涯方向、學術背景、技能、修課負擔、區塊公開/私人設定與首次登入引導。尚待：正式資料庫（Atlas）、職涯/技能/主修清單審核、（可選）預設篩選首頁。
+### Student Profiles & Preferences — Done
 
-- 建立帳號（email/andrew ID，需確認跟現有 Clerk 登入的關係）
-- 設定預設 modality 偏好
-- 設定每週固定忙碌時段
-- 任何時間可編輯 availability
-- 任何時間可編輯 profile/preferences
-- 偏好設定跨 session 保留
-- 記錄已修/在修課程
-- （可選）存預設篩選當首頁
+> Implemented on branch `feature/student-profile`; design in `docs/superpowers/specs/2026-09-11-student-profile-design.md`. Sign-in reuses Clerk — no separate account system. Beyond the items below, this also added career goals, skills, course load, per-section public/private visibility, and first-login onboarding.
 
-### Career Path/Skills Flagging — 進行中
-
-> 已合進 `main`。設計見 `docs/superpowers/specs/2026-09-14-career-skills-mapping-and-audit.md`。對應關係是人工整理的靜態資料（`packages/profile/mapping/`），課程對應的職涯由技能交集程式推導，不需要新的 DB 或 API。初版涵蓋約 94 門課，尚待團隊審核與擴充。「Match my goals」用 `recommendCourses` 列出符合 Profile 的課並前端分頁；搜尋框可再縮小清單。
-
-- [x] 課程對應職涯路徑（`careersForCourse`，依技能交集推導）
-- [x] 依職涯目標推薦選修課（`recommendCourses` + 搜尋頁「Match my goals」）
-- [x] 課程對應到哪些能力（`skillsForCourse`）
-- [x] 課程卡片顯示對應的職涯/技能標籤（搜尋、Saved、課程詳細頁）
-- [ ] 依所選領域顯示對應技能子區塊（尚未開始）
-
-### Schedule Builder — 尚未開始
-
-- 依篩選 + profile + career tag 產生 1-3 個候選課表
-- 排除跟已存 availability 衝突的時段
-- reconcile 每門課各自的 modality override
-- 存檔/匯出選定課表
-- （可選）使用者不滿意時重新產生候選
+- [x] Account creation (reuses Clerk sign-in)
+- [x] Set a default modality preference
+- [x] Set recurring weekly busy times (= availability)
+- [x] Edit availability at any time
+- [x] Edit profile/preferences at any time
+- [x] Preferences persist across sessions
+- [x] Record completed / in-progress courses
+- [ ] (Optional) Save a default filter set as the homepage — not started
 
 ## V2
 
-### Course & Professor Reviews
+### Career Path & Skills Navigator — In progress
 
-- 課程評分（1-5 星）+ 留言
-- 教授評分（1-5 星）+ 留言
-- 資料來源：優先嘗試 ScottyLabs course-api 的 CSV-based FCE parser，不行則用 dummy data
-- 顯示 workload、給分公平性/透明度等統計
+> Merged into `main`. Design in `docs/superpowers/specs/2026-09-14-career-skills-mapping-and-audit.md`. The course-to-skill and skill-to-career mapping is hand-curated static data (`packages/profile/mapping/`); which careers a course serves is derived from skill overlap, so no new DB or API was needed. The first pass covers about 94 courses and still needs team review and expansion. "Match my goals" uses `recommendCourses` to list courses that match the profile; it can be narrowed further with the search box and doesn't block normal search.
 
-## 目前不在範圍內
+**Career Goals**
+- [x] Select career goals (Profile's Career goals — up to 3, ranked by priority)
+- [ ] Explore career paths (browse/compare what a career path itself involves) — not started
+- [x] Save career interests
 
-### CMU Circles
+**Skills Mapping**
+- [x] Map courses to the skills they teach (`skillsForCourse`)
+- [x] Map which skills each career needs (`careerSkills.ts`)
+- [x] Show skill/career tags on course cards (search, Saved, course detail pages)
+- [x] Recommend electives toward career goals (`recommendCourses` + the search page's "Match my goals")
+- [ ] Identify skill gaps (skills you have vs. want are stored, but there's no dedicated "gap" view yet) — not started
 
-- 排課分享、社交連結、互動功能（follow、schedule reactions 等）
+**Academic Path**
+- [ ] Plan courses across semesters — not started
+- [ ] Balance degree requirements against career goals — not started
+- [ ] Track skill progress — not started
+- [ ] Explore alternative academic paths — not started
+
+## V3
+
+### Personalized Schedule Builder — Not started
+
+- Generate 1-3 candidate schedules from filters + profile + career tags
+- Exclude times that conflict with saved availability
+- Reconcile each course's own modality override
+- Save/export the chosen schedule
+- (Optional) regenerate candidates if the user isn't satisfied
+
+### Course & Professor Insights — Not started
+
+> Mural doesn't tag this with a version number; placed here (after Personalized Schedule Builder, before Scotty Circles) for now.
+
+- Course ratings (1-5 stars) + comments
+- Professor ratings (1-5 stars) + comments
+- Data source: try ScottyLabs' course-api CSV-based FCE parser first; fall back to dummy data if that doesn't work
+- Show workload, grading fairness/transparency, and similar stats
+
+## V4 (out of scope for now)
+
+### Scotty Circles
+
+- Schedule sharing, social connections, interactive features (follow, schedule reactions, etc.)
