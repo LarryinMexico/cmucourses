@@ -6,6 +6,7 @@ import { SchedulesCard } from "./SchedulesCard";
 import { FCECard } from "./FCECard";
 import { useFetchCourseInfo, useFetchCourseRequisites } from "~/app/api/course";
 import ReqTreeCard from "./ReqTreeCard";
+import RatingsCard from "./ratings/RatingsCard";
 
 type Props = {
   courseID: string;
@@ -24,6 +25,7 @@ const CourseDetail = ({ courseID }: Props) => {
     <div className="m-auto space-y-4 p-6">
       <CourseCard courseID={courseID} showFCEs={false} showCourseInfo={true} />
       {fces && <FCECard fces={fces} />}
+      <RatingsCard targetType="COURSE" targetID={courseID} />
       {info.schedules && (
         <SchedulesCard
           scheduleInfos={filterSessions([...info.schedules]).sort(

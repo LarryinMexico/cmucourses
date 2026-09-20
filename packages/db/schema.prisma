@@ -127,6 +127,29 @@ model schedules {
   @@index([instructors], map: "instructors")
 }
 
+enum RatingTargetType {
+  COURSE
+  INSTRUCTOR
+}
+
+model ratings {
+  id          String           @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId String
+  targetType  RatingTargetType
+  /// courseID for COURSE, instructor name string for INSTRUCTOR (professors have no stable id
+  /// anywhere in this codebase - fces.instructor and schedules.instructors are both free-text names)
+  targetID    String
+  stars       Int
+  comment     String?
+  /// courses only; UI-hidden for INSTRUCTOR, not schema-rejected
+  wishIKnew   String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([clerkUserId, targetType, targetID])
+  @@index([targetType, targetID])
+}
+
 model geneds {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   v              Int      @map("__v")

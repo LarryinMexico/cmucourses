@@ -8,6 +8,7 @@ import { getFCEs } from "~/controllers/fces";
 import { getInstructors } from "~/controllers/instructors";
 import { getGeneds } from "~/controllers/geneds";
 import { getSchedules } from "~/controllers/schedules";
+import { getOwnRating, getRatings, submitRating } from "~/controllers/ratings";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -37,6 +38,12 @@ app.route("/geneds").post(isUser, getGeneds);
 // The caller's own profile. POST is the read (the token travels in the body, like the other authed routes).
 app.route("/user/profile").post(requireUser, getProfile);
 app.route("/user/profile").patch(requireUser, patchProfile);
+
+// Other students' ratings for a course/instructor (?targetType=&targetID= in the query).
+app.route("/ratings").post(isUser, getRatings);
+// The caller's own rating: POST reads it (null if none), PATCH upserts it.
+app.route("/user/rating").post(requireUser, getOwnRating);
+app.route("/user/rating").patch(requireUser, submitRating);
 
 // the next parameter is needed!
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

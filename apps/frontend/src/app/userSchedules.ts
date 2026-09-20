@@ -30,6 +30,8 @@ export interface UserSchedule {
   courseSessions: CourseSessions;
   numColors: number;
   hoverSession?: HoverSession;
+  /** Set when this schedule came from the Generate panel, for a "why" badge. Absent otherwise. */
+  generated?: { score: number; reasons: string[] };
 }
 
 export interface UserSchedulesState {
@@ -196,6 +198,14 @@ export const userSchedulesSlice = createSlice({
       const schedule = getActiveSchedule(state);
       if (!schedule) return;
       schedule.hoverSession = undefined;
+    },
+    setActiveScheduleGeneratedMeta: (
+      state,
+      action: PayloadAction<{ score: number; reasons: string[] }>
+    ) => {
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.generated = action.payload;
     },
   },
 });

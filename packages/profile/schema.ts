@@ -218,3 +218,32 @@ export const emptyProfile = (): Profile => ({
   onboardedAt: null,
   updatedAt: null,
 });
+
+export const RATING_TARGET_TYPES = ["COURSE", "INSTRUCTOR"] as const;
+export type RatingTargetType = (typeof RATING_TARGET_TYPES)[number];
+
+export const RATING_LIMITS = { comment: 1000, wishIKnew: 1000 } as const;
+
+/**
+ * Body of PATCH /user/rating. `wishIKnew` is accepted for either target type at the schema
+ * level (Mongo has no per-branch cost) but the frontend only renders that field for courses.
+ */
+export const ratingPatchSchema = z
+  .object({
+    targetType: z.enum(RATING_TARGET_TYPES),
+    targetID: z.string().trim().min(1).max(100),
+    stars: z.number().int().min(1).max(5),
+    comment: nullableText(RATING_LIMITS.comment).optional(),
+    wishIKnew: nullableText(RATING_LIMITS.wishIKnew).optional(),
+  })
+  .strict()
+  .transform(({ targetType, targetID, ...rest }) => ({
+    ...rest,
+    targetType,
+    targetID: targetType === "COURSE" ? standardizeCourseID(targetID) : targetID,
+  }));
+
+/** What the client sends. */
+export type RatingPatchInput = z.input<typeof ratingPatchSchema>;
+/** What the server applies after validation and normalization. */
+export type RatingPatch = z.output<typeof ratingPatchSchema>;

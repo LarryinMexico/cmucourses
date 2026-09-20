@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { profilePatchSchema, standardizeCourseID } from "./schema";
+import { profilePatchSchema, ratingPatchSchema, standardizeCourseID } from "./schema";
 import { CAREERS } from "./taxonomy/careers";
 import { SKILLS } from "./taxonomy/skills";
 import { COLLEGES, MAJORS, majorsForCollege, MINORS } from "./taxonomy/colleges";
@@ -159,4 +159,61 @@ describe("profilePatchSchema", () => {
 test("standardizeCourseID", () => {
   expect(standardizeCourseID("15122")).toBe("15-122");
   expect(standardizeCourseID("15-122")).toBe("15-122");
+});
+
+describe("ratingPatchSchema", () => {
+  const parseRating = (input: unknown) => ratingPatchSchema.safeParse(input);
+
+  test("accepts a minimal course rating and standardizes the course id", () => {
+    const result = parseRating({ targetType: "COURSE", targetID: "15122", stars: 5 });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.targetID).toBe("15-122");
+  });
+
+  test("accepts a full course rating with comment and wishIKnew", () => {
+    const result = parseRating({
+      targetType: "COURSE",
+      targetID: "15-122",
+      stars: 4,
+      comment: "Great course",
+      wishIKnew: "Start the projects early",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("leaves an instructor name untouched", () => {
+    const result = parseRating({ targetType: "INSTRUCTOR", targetID: "Jane Doe", stars: 3 });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.targetID).toBe("Jane Doe");
+  });
+
+  test("rejects stars outside 1-5", () => {
+    expect(parseRating({ targetType: "COURSE", targetID: "15-122", stars: 0 }).success).toBe(false);
+    expect(parseRating({ targetType: "COURSE", targetID: "15-122", stars: 6 }).success).toBe(false);
+  });
+
+  test("rejects a non-integer stars value", () => {
+    expect(parseRating({ targetType: "COURSE", targetID: "15-122", stars: 4.5 }).success).toBe(false);
+  });
+
+  test("rejects an unknown targetType", () => {
+    expect(parseRating({ targetType: "PROFESSOR", targetID: "15-122", stars: 5 }).success).toBe(false);
+  });
+
+  test("rejects an empty targetID", () => {
+    expect(parseRating({ targetType: "COURSE", targetID: "", stars: 5 }).success).toBe(false);
+  });
+
+  test("turns a blank comment into null", () => {
+    const result = parseRating({ targetType: "COURSE", targetID: "15-122", stars: 5, comment: "   " });
+    expect(result.success && result.data.comment).toBeNull();
+  });
+
+  test("rejects a comment over the limit", () => {
+    expect(
+      parseRating({ targetType: "COURSE", targetID: "15-122", stars: 5, comment: "x".repeat(1001) }).success
+    ).toBe(false);
+  });
 });
