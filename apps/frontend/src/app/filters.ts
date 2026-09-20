@@ -2,6 +2,15 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { Session } from "./types";
 import { standardizeIdsInString } from "./utils";
 
+/**
+ * Time-of-day buckets, matched server-side against a section's start time. "tba" is the
+ * roughly half of the catalog that has no stated meeting time; it is only ever included
+ * when explicitly selected.
+ */
+export const CLASS_TIMES = ["morning", "afternoon", "evening", "tba"] as const;
+
+export type ClassTime = (typeof CLASS_TIMES)[number];
+
 export interface FiltersState {
   search: string;
   departments: {
@@ -21,6 +30,10 @@ export interface FiltersState {
   levels: {
     active: boolean;
     selected: boolean[]; // selected[i] <=> show i00 level
+  };
+  classTimes: {
+    active: boolean;
+    selected: ClassTime[];
   };
   page: number;
   exactResultsCourses: string[];
@@ -56,6 +69,10 @@ const initialState: FiltersState = {
       false, // 800
       false, // 900
     ],
+  },
+  classTimes: {
+    active: false,
+    selected: [],
   },
   page: 1,
   exactResultsCourses: [],
@@ -115,11 +132,23 @@ export const filtersSlice = createSlice({
         state.levels.selected[index] = false;
       }
     },
+    updateClassTimesActive: (state, action: PayloadAction<boolean>) => {
+      state.classTimes.active = action.payload;
+    },
+    updateClassTimes: (state, action: PayloadAction<ClassTime[]>) => {
+      state.classTimes.selected = action.payload;
+    },
+    deleteClassTime: (state, action: PayloadAction<ClassTime>) => {
+      state.classTimes.selected = state.classTimes.selected.filter(
+        (classTime) => classTime !== action.payload
+      );
+    },
     resetFilters: (state) => {
       state.departments = initialState.departments;
       state.levels = initialState.levels;
       state.units = initialState.units;
       state.semesters = initialState.semesters;
+      state.classTimes = initialState.classTimes;
     },
     setPage: (state, action: PayloadAction<number>) => {
       state.page = action.payload;

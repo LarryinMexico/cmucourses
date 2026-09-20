@@ -47,6 +47,12 @@ const fetchCourseInfosByPage = async (
     );
   }
 
+  if (filters.classTimes.active && filters.classTimes.selected.length > 0) {
+    filters.classTimes.selected.forEach((classTime) =>
+      params.append("classTimes", classTime)
+    );
+  }
+
   if (filters.levels.active) {
     let value = "";
     filters.levels.selected.forEach((elem, index) => {

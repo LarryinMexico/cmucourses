@@ -16,10 +16,24 @@ Done:
 - Unit slider (0-24)
 - Offered in (mini/semester) dropdown
 
-**Not done** (these three are currently in the Mural board's Done column, but there is no implementation for them in the code — Sprint Review has a rule that the team loses 1 point if something in Done turns out not to be done, so we should either implement these or move the cards out of Done before moving further down this roadmap):
-- Restrict results to morning/afternoon/evening sections
-- Modality filter (in-person/online/hybrid), which would override the profile's default
-- Sort or highlight results by best fit against saved availability
+Also done (these three were sitting in the Mural board's Done column with no implementation; Sprint Review deducts 1 point for anything in Done that turns out not to be done):
+- [x] Restrict results to morning/afternoon/evening sections — the **Class Times** filter (`ClassTimesFilter.tsx`), matched server-side in the search aggregation
+- [x] Sort or highlight results by best fit against saved availability — implemented as **highlight**: an availability badge on every course card, comparing `profile.busyBlocks` against the course's lecture times (`packages/profile/availability.ts`)
+- [ ] ~~Modality filter (in-person/online/hybrid), which would override the profile's default~~ — **not possible with the current data; move this card out of Done.** Replaced by the "Time not set" option in the Class Times filter.
+
+#### Why the modality filter was replaced
+
+The course catalog has no modality field, and the nearest proxies are dead for current terms. Measured against the live catalog (`https://course.apis.scottylabs.org/courses/search?schedules=true`, ~390-course sample):
+
+| Signal | Fall 2020 | Spring 2025 | Fall 2026 |
+| --- | --- | --- | --- |
+| `room: "CMU REMOTE"` | 171 | 3 | 0 |
+| `building: "DNM"` | 64 | 198 | 0 |
+| `building` empty/null | 266 | 122 | 673 / 673 (100%) |
+
+`CMU REMOTE` is a COVID-era artifact that stops after 2021; `DNM` stops after Spring 2025; for Spring/Fall 2026 every time entry has an empty building. `location` holds a city (`Pittsburgh, Pennsylvania`, `Doha, Qatar`, `Los Angeles, California`), not a delivery mode. Any modality filter inferred from these fields would return zero results for exactly the terms students browse.
+
+What the data *does* support is whether a course has a stated meeting time at all: `begin` is the literal string `"TBA"` in ~54% of Fall 2026 time entries. That is shipped as the fourth Class Times option, so students can still isolate courses with no fixed meeting time. `profile.modality` remains stored and unused until the upstream ScottyLabs data carries a modality field.
 
 ### Student Profiles & Preferences — Done
 

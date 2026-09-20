@@ -17,6 +17,7 @@ import { useFetchCourseInfo } from "~/app/api/course";
 import { useFetchFCEInfoByCourse } from "~/app/api/fce";
 import { useAuth } from "@clerk/nextjs";
 import CourseTags from "./CourseTags";
+import AvailabilityBadge from "./AvailabilityBadge";
 
 interface Props {
   courseID: string;
@@ -91,6 +92,7 @@ const CourseCard = ({
           <div className="text-md mb-1 hidden md:block">
             {schedulesAvailableString}
           </div>
+          <AvailabilityBadge schedules={info.schedules} />
           {showCourseInfo && (
             <div className="flex flex-row justify-between space-x-4 md:flex-col md:space-x-0 md:space-y-2">
               <div>

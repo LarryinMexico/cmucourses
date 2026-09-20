@@ -14,6 +14,23 @@ import db, { Prisma } from "@cmucourses/db";
 const projection = { _id: false, __v: false };
 const MAX_LIMIT = 10;
 
+/**
+ * Meeting times are stored as zero-padded 12-hour strings ("08:00AM"), which Mongo cannot
+ * order, so the time-of-day buckets are matched by pattern on `begin` rather than compared
+ * numerically. Roughly half of all catalog entries have a literal "TBA" instead of a time;
+ * those only match the "tba" bucket, never a real one.
+ */
+const CLASS_TIME_PATTERNS = {
+  morning: "^(0[6-9]|1[01]):\\d\\dAM$",
+  afternoon: "^(12|0[1-4]):\\d\\dPM$",
+  evening: "^(0[5-9]|1[01]):\\d\\dPM$",
+  tba: "^TBA$",
+} as const;
+
+type ClassTime = keyof typeof CLASS_TIME_PATTERNS;
+
+const isClassTime = (value: string): value is ClassTime => value in CLASS_TIME_PATTERNS;
+
 export interface GetCourseById {
   params: {
     courseID: string;
@@ -95,6 +112,8 @@ export interface GetFilteredCourses {
     schedules?: BoolLiteral;
     levels?: string;
     session?: SingleOrArray<string>;
+    /** Time-of-day buckets: "morning" | "afternoon" | "evening" | "tba". */
+    classTimes?: SingleOrArray<string>;
     fces?: BoolLiteral;
   };
 }
@@ -162,7 +181,28 @@ export const getFilteredCourses: RequestHandler<
     });
   }
 
-  if (fromBoolLiteral(req.query.schedules))
+  const sessions =
+    req.query.session === undefined
+      ? []
+      : singleToArray(req.query.session).flatMap((serializedSession) => {
+          try {
+            const session = JSON.parse(serializedSession);
+            return [{ year: parseInt(session.year), semester: session.semester }];
+          } catch {
+            // SyntaxError
+            return [];
+          }
+        });
+
+  const classTimes =
+    req.query.classTimes === undefined
+      ? []
+      : singleToArray(req.query.classTimes).filter(isClassTime);
+
+  // The session and class-time filters both read the joined schedules, so the lookup has to
+  // run whenever either is active - not only when the caller asked for schedules to be
+  // returned. Without it they would silently match nothing.
+  if (fromBoolLiteral(req.query.schedules) || sessions.length > 0 || classTimes.length > 0)
     pipeline.push({
       $lookup: {
         from: "schedules",
@@ -172,25 +212,32 @@ export const getFilteredCourses: RequestHandler<
       },
     });
 
-  if (req.query.session !== undefined) {
-    const sessions = singleToArray(req.query.session).flatMap((serializedSession) => {
-      try {
-        const session = JSON.parse(serializedSession);
-        return [{ year: parseInt(session.year), semester: session.semester }];
-      } catch {
-        // SyntaxError
-        return [];
-      }
+  // Both predicates go inside one $elemMatch so they have to hold for the *same* schedule
+  // document. Applied separately, a course with a morning lecture in 2020 and an evening one
+  // this fall would wrongly satisfy "morning" + "fall 2026" together.
+  const scheduleClauses: Record<string, unknown>[] = [];
+
+  if (sessions.length > 0) scheduleClauses.push({ $or: sessions });
+
+  if (classTimes.length > 0) {
+    scheduleClauses.push({
+      $or: classTimes.flatMap((classTime) => [
+        { "lectures.times.begin": { $regex: CLASS_TIME_PATTERNS[classTime] } },
+        { "sections.times.begin": { $regex: CLASS_TIME_PATTERNS[classTime] } },
+      ]),
     });
+  }
+
+  // Guarding on a non-empty list also keeps an all-malformed `session` query from emitting
+  // `$or: []`, which Mongo rejects outright.
+  if (scheduleClauses.length > 0) {
     pipeline.push({
       $match: {
         schedules: {
-          $elemMatch: {
-            $or: sessions,
-          },
+          $elemMatch: { $and: scheduleClauses },
         },
       },
-    });
+    } as Prisma.InputJsonValue);
   }
 
   pipeline.push({ $addFields: addedFields as Prisma.InputJsonValue });

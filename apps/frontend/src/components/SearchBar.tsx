@@ -11,6 +11,7 @@ import {
 } from "~/app/utils";
 import { filtersSlice } from "~/app/filters";
 import { getPillboxes } from "./filters/LevelFilter";
+import { CLASS_TIME_SHORT_LABELS } from "./filters/ClassTimesFilter";
 import { useFetchCourseInfosByPage } from "~/app/api/course";
 import { useAuth } from "@clerk/nextjs";
 import { usePostHog } from "posthog-js/react";
@@ -95,6 +96,22 @@ const AppliedFilters = () => {
           key={`session-${sessionToShortString(session)}`}
         >
           {sessionToString(session)}
+        </AppliedFiltersPill>
+      );
+    });
+  }
+
+  if (filter.classTimes.active) {
+    filter.classTimes.selected.forEach((classTime) => {
+      badges.push(
+        <AppliedFiltersPill
+          className="text-indigo-800 bg-indigo-50"
+          onDelete={() => {
+            dispatch(filtersSlice.actions.deleteClassTime(classTime));
+          }}
+          key={`classTime-${classTime}`}
+        >
+          {CLASS_TIME_SHORT_LABELS[classTime]}
         </AppliedFiltersPill>
       );
     });
