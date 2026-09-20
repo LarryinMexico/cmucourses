@@ -1,4 +1,6 @@
 import {
+  AcademicCapIcon,
+  BriefcaseIcon,
   ChatBubbleBottomCenterTextIcon,
   ClockIcon,
   MagnifyingGlassIcon,
@@ -94,6 +96,18 @@ export const SideNav = ({ activePage }: { activePage?: string }) => {
         text="Finals"
         link="/finals"
         active={activePage === "finals"}
+      />
+      <SideNavItem
+        icon={BriefcaseIcon}
+        text="Careers"
+        link="/careers"
+        active={activePage === "careers"}
+      />
+      <SideNavItem
+        icon={AcademicCapIcon}
+        text="Requirements"
+        link="/requirements"
+        active={activePage === "requirements"}
       />
       <SideNavItem
         icon={ChatBubbleBottomCenterTextIcon}

@@ -4,30 +4,19 @@ import { SkillID, SKILLS } from "../taxonomy/skills";
 import { labelOf } from "../taxonomy/types";
 import { COURSE_SKILLS } from "./courseSkills";
 import { CAREER_SKILLS } from "./careerSkills";
+import { CAREER_CORE_SKILLS, courseSkillsIndex, isCareerID, SKILL_COURSES } from "./internal";
 
 export { COURSE_SKILLS } from "./courseSkills";
 export { CAREER_SKILLS } from "./careerSkills";
-
-// Indexing COURSE_SKILLS/CAREER_SKILLS by an arbitrary (not literal) string needs a type with an
-// index signature; both `as const` objects are already structurally compatible with these, so
-// this is a free reinterpretation, not a cast of the data.
-const courseSkillsIndex: Record<string, readonly SkillID[]> = COURSE_SKILLS;
-type CareerSkillConfig = (typeof CAREER_SKILLS)[CareerID];
-const careerSkillEntries = Object.entries(CAREER_SKILLS) as [CareerID, CareerSkillConfig][];
-
-const CAREER_IDS: ReadonlySet<string> = new Set(careerSkillEntries.map(([career]) => career));
-const isCareerID = (id: string): id is CareerID => CAREER_IDS.has(id);
-
-// Precomputed once at module load: which skills establish a course's link to each career (see
-// careersForCourse). CAREER_SKILLS itself is small enough that this isn't a hot-path
-// optimization so much as documentation of "core skills decide the career link".
-const CAREER_CORE_SKILLS: ReadonlyMap<CareerID, ReadonlySet<SkillID>> = new Map(
-  careerSkillEntries.map(([career, { core }]) => [career, new Set(core)])
-);
+export { isCareerID } from "./internal";
+export * from "./careerProgress";
 
 /** The skills a course teaches, standardizing the course ID first. `[]` if not mapped yet. */
 export const skillsForCourse = (courseID: string): readonly SkillID[] =>
   courseSkillsIndex[standardizeCourseID(courseID)] ?? [];
+
+/** Courses that teach a given skill — the reverse of COURSE_SKILLS. `[]` if none do. */
+export const coursesForSkill = (skill: string): readonly string[] => SKILL_COURSES.get(skill as SkillID) ?? [];
 
 /** The careers a course serves: those whose core skills overlap what the course teaches. */
 export const careersForCourse = (courseID: string): CareerID[] => {

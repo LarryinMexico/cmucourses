@@ -50,13 +50,15 @@ What the data *does* support is whether a course has a stated meeting time at al
 
 ## V2
 
-### Career Path & Skills Navigator — In progress
+### Career Path & Skills Navigator — Done
 
 > Merged into `main`. Design in `docs/superpowers/specs/2026-09-14-career-skills-mapping-and-audit.md`. The course-to-skill and skill-to-career mapping is hand-curated static data (`packages/profile/mapping/`); which careers a course serves is derived from skill overlap, so no new DB or API was needed. The first pass covers about 94 courses and still needs team review and expansion. "Match my goals" uses `recommendCourses` to list courses that match the profile; it can be narrowed further with the search box and doesn't block normal search.
+>
+> "Skills you have" throughout this section means `profile.skillsHave` plus skills implied by courses marked taken/in-progress (`skillsForCourse` on each) — taking 15-213 counts as having `systems-programming` without re-declaring it, per `careerProgress()` in `packages/profile/mapping/careerProgress.ts`.
 
 **Career Goals**
 - [x] Select career goals (Profile's Career goals — up to 3, ranked by priority)
-- [ ] Explore career paths (browse/compare what a career path itself involves) — not started
+- [x] Explore career paths — new `/careers` page: browse every career's core/supporting skills, with your own skills and goals highlighted (`allCareerProgress`)
 - [x] Save career interests
 
 **Skills Mapping**
@@ -64,19 +66,22 @@ What the data *does* support is whether a course has a stated meeting time at al
 - [x] Map which skills each career needs (`careerSkills.ts`)
 - [x] Show skill/career tags on course cards (search, Saved, course detail pages)
 - [x] Recommend electives toward career goals (`recommendCourses` + the search page's "Match my goals")
-- [ ] Identify skill gaps (skills you have vs. want are stored, but there's no dedicated "gap" view yet) — not started
+- [x] Identify skill gaps — `/careers` "Your progress": each target career shows a core-skill progress bar, covered skills, and gap skills with up to 3 suggested courses per gap (`coursesForSkill`, the reverse of `skillsForCourse`)
+- [x] Track skill progress — the same computation as skill gaps, shown as `coreCovered / coreTotal` per career; building these separately would have duplicated the logic
 
 **Academic Path**
-- [ ] Plan courses across semesters — not started
-- [ ] Balance degree requirements against career goals — not started
-- [ ] Track skill progress — not started
-- [ ] Explore alternative academic paths — not started
+- [x] Balance degree requirements against career goals — **MISM only.** New `/requirements` page tracks the 13 core requirements from the MISM program handbook (`packages/profile/requirements/mism.ts`) against courses taken/in-progress, plus elective-unit progress and elective suggestions filtered by career goals (`recommendCourses`, excluding anything that already satisfies a core requirement). No other major's requirements have been transcribed yet — `requirementsForMajor` returns `null` for everything else, and the page says so rather than showing an empty shell.
+  - `95-867` ("Tech Strategy & Governance"), listed in the MISM handbook, does not exist anywhere in the live course catalog (checked against the full ~8,400-course catalog, 2026-09-19). It stays in the requirement data and renders normally, marked "not in the course catalog" with no course link — see `requirements/mism.ts` for detail. `scripts/check-course-ids.ts` checks for this on every run and expects exactly this one miss.
+- [ ] Plan courses across semesters — moved to V3 (Personalized Schedule Builder): it's the same multi-semester planning surface that builder needs, so it belongs with that work rather than duplicated here
+- [ ] Explore alternative academic paths — moved to V3, same reason
 
 ## V3
 
 ### Personalized Schedule Builder — Not started
 
-> Updated 2026-09-18 to match the latest Mural Features Decomposition board: "Apply career & skill goals" was added under Generate, and "Generate alternative options" was removed from Finalize (the team's Product Backlog board still lists the old version under V3 — the two boards are out of sync with each other, not something this file needs to track).
+> Updated 2026-09-18 to match the latest Mural Features Decomposition board: "Apply career & skill goals" was added under Generate, and "Generate alternative options" was removed from Finalize (the team's Product Backlog board still lists the old version under V3 — the two boards are out of sync with each other, not something this file needs to track). Updated 2026-09-19: "Plan courses across semesters" and "Explore alternative academic paths" moved here from V2's Academic Path — both are the same multi-semester planning surface this builder needs, so building them separately would have meant doing the work twice.
+>
+> The availability-conflict logic this needs already exists: `parseCatalogTime` / `availabilityFit` / `meetingGroupsFor` in `packages/profile/availability.ts` (built for the search page's availability badge, V1) bridge catalog meeting times against `profile.busyBlocks` and are unit-tested — reuse them rather than re-deriving the overlap math.
 
 - Generate 1-3 candidate schedules from filters + profile
 - Apply saved course preferences during generation
@@ -85,6 +90,8 @@ What the data *does* support is whether a course has a stated meeting time at al
 - Compare schedule options and show why each was recommended
 - Adjust course preferences and regenerate based on changes
 - Select a preferred schedule and save/export it
+- Plan courses across semesters (moved from V2's Academic Path)
+- Explore alternative academic paths (moved from V2's Academic Path)
 
 ### Course & Professor Insights — Not started
 

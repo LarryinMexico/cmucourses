@@ -5,3 +5,4 @@ export * from "./taxonomy/skills";
 export * from "./taxonomy/colleges";
 export * from "./mapping";
 export * from "./availability";
+export * from "./requirements";

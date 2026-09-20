@@ -12,7 +12,7 @@ import { classNames } from "~/app/utils";
 const MAX_SKILLS = 4;
 const MAX_CAREERS = 3;
 
-const Pill = ({
+export const Pill = ({
   children,
   highlighted,
 }: {
@@ -29,7 +29,7 @@ const Pill = ({
   </span>
 );
 
-const TagRow = ({
+export const TagRow = ({
   ids,
   labels,
   highlightIDs,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Combobox,
   ComboboxButton,
@@ -173,13 +173,25 @@ export const TaxonomyMultiSelect = ({
   value,
   onChange,
   max,
+  closeOnSelect = false,
 }: {
   items: readonly TaxonomyItem[];
   value: string[];
   onChange: (value: string[]) => void;
   max?: number;
+  /**
+   * Close the dropdown after each pick instead of staying open for more. Off by default: most
+   * uses (skills, up to LIMITS.skills = 30) expect picking several in a row. Turn it on for
+   * fields where one pick is the common case (majors, minors).
+   */
+  closeOnSelect?: boolean;
 }) => {
   const [query, setQuery] = useState("");
+  // Headless UI's Combobox has no close() render prop (unlike Listbox/Menu/Popover) and does not
+  // close on programmatic blur() - both verified against @headlessui/react's compiled source,
+  // neither documented. What it does unconditionally on Escape, in every mode, is close - so
+  // ComboboxInput's forwarded ref lets closeOnSelect simulate that keypress after a pick.
+  const inputRef = useRef<HTMLInputElement>(null);
   const full = max !== undefined && value.length >= max;
   const searchTerm = query.toLowerCase();
   // Deprecated entries stay visible when already chosen, but can't be newly picked.
@@ -197,6 +209,12 @@ export const TaxonomyMultiSelect = ({
           if (max !== undefined && next.length > max) return;
           onChange(next);
           setQuery("");
+          if (closeOnSelect) {
+            inputRef.current?.dispatchEvent(
+              new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+            );
+            inputRef.current?.blur();
+          }
         }}
         multiple
       >
@@ -213,6 +231,7 @@ export const TaxonomyMultiSelect = ({
               />
             ))}
             <ComboboxInput
+              ref={inputRef}
               className="shadow-xs flex rounded py-0.5 text-base leading-6 bg-white focus:outline-none sm:text-sm sm:leading-5"
               value={query}
               onChange={(e) => setQuery(e.target.value)}

@@ -64,6 +64,7 @@ export const AcademicFields = ({
             value={value.majors}
             onChange={(majors) => set({ majors })}
             max={LIMITS.majors}
+            closeOnSelect
           />
         </Field>
       </div>
@@ -75,6 +76,7 @@ export const AcademicFields = ({
               value={value.minors}
               onChange={(minors) => set({ minors })}
               max={LIMITS.minors}
+              closeOnSelect
             />
           </Field>
         </div>
