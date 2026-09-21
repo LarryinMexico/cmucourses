@@ -7,6 +7,8 @@ import { Combobox } from "@headlessui/react";
 import { classNames, getDepartmentByName } from "~/app/utils";
 import { DEPARTMENTS } from "~/app/constants";
 
+const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
 const DepartmentFilter = () => {
   const dispatch = useAppDispatch();
 
@@ -66,8 +68,16 @@ const DepartmentFilter = () => {
                     className="flex items-center gap-1 rounded px-2 py-0.5 text-blue-800 bg-blue-50"
                   >
                     <span>{getDepartmentByName(department)?.shortName}</span>
+                    {/*
+                      The "x" sits inside Combobox.Button, whose pointerdown/mousedown handlers
+                      toggle the dropdown and cancel the default action — which swallowed the
+                      click before it reached this handler. Stopping those here (same as the
+                      profile page's Pill) makes a press on the "x" only remove the pill.
+                    */}
                     <XMarkIcon
                       className="h-3 w-3 cursor-pointer"
+                      onPointerDown={stop}
+                      onMouseDown={stop}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();

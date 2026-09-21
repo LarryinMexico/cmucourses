@@ -58,12 +58,17 @@ export const AcademicFields = ({
         />
       </Field>
       <div className="sm:col-span-2">
-        <Field label="Majors / programs">
+        <Field label="Major / program">
+          {/*
+            Single-pick: one program is the normal case, and picking a new one replaces the
+            old. The stored shape stays an array capped at LIMITS.majors, so a profile saved
+            earlier with more than one still loads and can be edited down.
+          */}
           <TaxonomyMultiSelect
             items={majors}
             value={value.majors}
             onChange={(majors) => set({ majors })}
-            max={LIMITS.majors}
+            max={1}
             closeOnSelect
           />
         </Field>

@@ -192,7 +192,9 @@ export const TaxonomyMultiSelect = ({
   // neither documented. What it does unconditionally on Escape, in every mode, is close - so
   // ComboboxInput's forwarded ref lets closeOnSelect simulate that keypress after a pick.
   const inputRef = useRef<HTMLInputElement>(null);
-  const full = max !== undefined && value.length >= max;
+  // At max 1 a new pick replaces the old one (see onChange), so options must stay selectable —
+  // greying them out once something is chosen would make the field impossible to change.
+  const full = max !== undefined && max > 1 && value.length >= max;
   const searchTerm = query.toLowerCase();
   // Deprecated entries stay visible when already chosen, but can't be newly picked.
   const options = activeItems(items).filter((item) =>
@@ -206,7 +208,10 @@ export const TaxonomyMultiSelect = ({
       <Combobox
         value={value}
         onChange={(next: string[]) => {
-          if (max !== undefined && next.length > max) return;
+          // With max 1 the field is single-pick, so a new choice replaces the old one instead
+          // of being rejected — otherwise you'd have to remove the current value first.
+          if (max === 1) next = next.slice(-1);
+          else if (max !== undefined && next.length > max) return;
           onChange(next);
           setQuery("");
           if (closeOnSelect) {
@@ -269,7 +274,7 @@ export const TaxonomyMultiSelect = ({
           </ComboboxOptions>
         </div>
       </Combobox>
-      {max !== undefined && (
+      {max !== undefined && max > 1 && (
         <div className="mt-1 text-gray-400">Up to {max}</div>
       )}
     </div>
