@@ -127,6 +127,29 @@ model schedules {
   @@index([instructors], map: "instructors")
 }
 
+enum RatingTargetType {
+  COURSE
+  INSTRUCTOR
+}
+
+model ratings {
+  id          String           @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId String
+  targetType  RatingTargetType
+  /// courseID for COURSE, instructor name string for INSTRUCTOR (professors have no stable id
+  /// anywhere in this codebase - fces.instructor and schedules.instructors are both free-text names)
+  targetID    String
+  stars       Int
+  comment     String?
+  /// courses only; UI-hidden for INSTRUCTOR, not schema-rejected
+  wishIKnew   String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([clerkUserId, targetType, targetID])
+  @@index([targetType, targetID])
+}
+
 model geneds {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   v              Int      @map("__v")
@@ -185,11 +208,24 @@ type ProfilesBusyBlocks {
   label String?
 }
 
+type ProfilesSchedulePreferences {
+  earliestStart Int?
+  latestEnd     Int?
+  preferredDays Int[]
+  compactDays   Boolean
+}
+
 type ProfilesCourses {
   courseID String
   status   CourseStatus
   semester String?
   year     String?
+}
+
+type ProfilesPlannedCourses {
+  courseID String
+  semester String
+  year     String
 }
 
 type ProfilesVisibility {
@@ -200,23 +236,62 @@ type ProfilesVisibility {
 }
 
 model profiles {
-  id          String               @id @default(auto()) @map("_id") @db.ObjectId
-  clerkUserId String               @unique
-  displayName String?
-  bio         String?
+  id                  String                       @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId         String                       @unique
+  displayName         String?
+  bio                 String?
   /// ordered by priority
-  careers     String[]
-  skillsHave  String[]
-  skillsWant  String[]
-  academic    ProfilesAcademic?
-  workload    ProfilesWorkload?
-  modality    Modality?
-  busyBlocks  ProfilesBusyBlocks[]
-  courses     ProfilesCourses[]
-  visibility  ProfilesVisibility
-  onboardedAt DateTime?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  careers             String[]
+  skillsHave          String[]
+  skillsWant          String[]
+  academic            ProfilesAcademic?
+  workload            ProfilesWorkload?
+  modality            Modality?
+  busyBlocks          ProfilesBusyBlocks[]
+  schedulePreferences ProfilesSchedulePreferences?
+  courses             ProfilesCourses[]
+  plannedCourses      ProfilesPlannedCourses[]
+  visibility          ProfilesVisibility
+  onboardedAt         DateTime?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
 
   @@index([courses.courseID])
+}
+
+type SocialScheduleCourses {
+  courseID String
+  lecture  String?
+  section  String?
+}
+
+model socialSchedules {
+  id          String                  @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId String                  @unique
+  name        String
+  semester    String
+  year        String
+  courses     SocialScheduleCourses[]
+  updatedAt   DateTime                @updatedAt
+}
+
+model follows {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  followerUserId    String
+  followedProfileId String   @db.ObjectId
+  createdAt         DateTime @default(now())
+
+  @@unique([followerUserId, followedProfileId])
+  @@index([followedProfileId])
+}
+
+model scheduleReactions {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  reactorUserId   String
+  targetProfileId String   @db.ObjectId
+  reaction        String
+  updatedAt       DateTime @updatedAt
+
+  @@unique([reactorUserId, targetProfileId])
+  @@index([targetProfileId])
 }

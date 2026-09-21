@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useFetchSchedulesByInstructor } from "~/app/api/schedules";
 import { InstructorSchedulesDetail } from "~/components/InstructorSchedulesDetail";
+import RatingsCard from "~/components/ratings/RatingsCard";
 
 type Props = {
   name: string;
@@ -56,28 +57,32 @@ const InstructorDetail = ({ name, showLoading, extraFilters }: Props) => {
   });
 
   return (
-    <Card>
-      <div>
-        <Link href={`/instructor/${name}`}>
-          <div className="text-md font-semibold text-gray-800">
-            {toNameCase(name)}
-          </div>
-        </Link>
-        {/* TODO: Add more information about instructor using Directory API */}
-      </div>
-      <div>
-        <InstructorFCEDetail
-          fces={fces?.fces ?? []}
-          aggregationOptions={aggregationOptions}
-          extraFilters={extraFilters}
-        />
-      </div>
-      {schedules.schedules.length > 0 && (
-        <div className="pt-1">
-          <InstructorSchedulesDetail scheduleInfos={scheduleInfos} />
+    <>
+      <Card>
+        <div>
+          <Link href={`/instructor/${name}`}>
+            <div className="text-md font-semibold text-gray-800">
+              {toNameCase(name)}
+            </div>
+          </Link>
+          {/* TODO: Add more information about instructor using Directory API */}
         </div>
-      )}
-    </Card>
+        <div>
+          <InstructorFCEDetail
+            fces={fces?.fces ?? []}
+            aggregationOptions={aggregationOptions}
+            extraFilters={extraFilters}
+          />
+        </div>
+        {schedules.schedules.length > 0 && (
+          <div className="pt-1">
+            <InstructorSchedulesDetail scheduleInfos={scheduleInfos} />
+          </div>
+        )}
+      </Card>
+      {/* extraFilters is only set true by the single-instructor page, not the search results list. */}
+      {extraFilters && <RatingsCard targetType="INSTRUCTOR" targetID={name} />}
+    </>
   );
 };
 
