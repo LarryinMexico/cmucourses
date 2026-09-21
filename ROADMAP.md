@@ -77,30 +77,48 @@ What the data *does* support is whether a course has a stated meeting time at al
 
 ## V3
 
-### Personalized Schedule Builder — Not started
+### Personalized Schedule Builder — Partially done
 
 > Updated 2026-09-18 to match the latest Mural Features Decomposition board: "Apply career & skill goals" was added under Generate, and "Generate alternative options" was removed from Finalize (the team's Product Backlog board still lists the old version under V3 — the two boards are out of sync with each other, not something this file needs to track). Updated 2026-09-19: "Plan courses across semesters" and "Explore alternative academic paths" moved here from V2's Academic Path — both are the same multi-semester planning surface this builder needs, so building them separately would have meant doing the work twice.
 >
-> The availability-conflict logic this needs already exists: `parseCatalogTime` / `availabilityFit` / `meetingGroupsFor` in `packages/profile/availability.ts` (built for the search page's availability badge, V1) bridge catalog meeting times against `profile.busyBlocks` and are unit-tested — reuse them rather than re-deriving the overlap math.
+> Generator logic lives in `packages/profile/scheduleGenerator.ts`, unit-tested and wired into `/schedules` as a new Generate panel. It reuses `availabilityFit`/`meetingGroupsFor` (`packages/profile/availability.ts`, V1) for conflict checking and the same core/supporting/want weighting as `recommendCourses` (V2) for career/skill scoring — no overlap math or scoring rules were re-derived. **Scope decision:** candidates are built only from courses the student adds manually (reusing the existing `ScheduleSearch` picker), not auto-selected from filters; and generated schedules stay client-side in the existing `userSchedules` slice (localStorage) rather than a new backend model, since the manual builder already only saves locally.
 
-- Generate 1-3 candidate schedules from filters + profile
-- Apply saved course preferences during generation
-- Apply career & skill goals during generation
-- Exclude times that conflict with saved availability
-- Compare schedule options and show why each was recommended
-- Adjust course preferences and regenerate based on changes
-- Select a preferred schedule and save/export it
-- Plan courses across semesters (moved from V2's Academic Path)
-- Explore alternative academic paths (moved from V2's Academic Path)
+**Generate**
+- [x] Generate 1-3 personalized schedules — `generateSchedules`, beam-pruned so it stays fast without a full cartesian product over sections
+- [x] Apply availability constraints — scored against `profile.busyBlocks`; a conflicting course is still scheduled (never silently dropped) but flagged and penalized in the ranking
+- [ ] Apply saved course preferences during generation — not applicable as scoped; the student's own picks are the input, not a preference profile to select from
+- [x] Apply career & skill goals during generation
 
-### Course & Professor Insights — Not started
+**Compare & Refine**
+- [x] Compare schedule options — up to 3 candidates shown with a score breakdown (availability / workload / career fit)
+- [x] See why each schedule was recommended — per-candidate `reasons` text (time conflicts, unit-range fit, skills it builds toward)
+- [ ] Adjust course preferences and regenerate based on changes — not built; re-running Generate starts over rather than tweaking in place
 
-> Mural doesn't tag this with a version number; placed here (after Personalized Schedule Builder, before Scotty Circles) for now.
+**Finalize**
+- [x] Select a preferred schedule — "Use this schedule" fills the existing manual builder's lecture/section selections
+- [x] Save chosen schedule — reuses the existing local `userSchedules` save (see scope decision above)
+- [x] Export/share schedule — reuses the existing `?courses=...` shareable link; no `.ics` export yet
+- [ ] Plan courses across semesters (moved from V2's Academic Path) — not built
+- [ ] Explore alternative academic paths (moved from V2's Academic Path) — not built
 
-- Course ratings (1-5 stars) + comments
-- Professor ratings (1-5 stars) + comments
-- Data source: try ScottyLabs' course-api CSV-based FCE parser first; fall back to dummy data if that doesn't work
-- Show workload, grading fairness/transparency, and similar stats
+### Course & Professor Insights — Partially done
+
+> Mural doesn't tag this with a version number; placed here (after Personalized Schedule Builder, before Scotty Circles) for now. Updated 2026-09-20: implemented as genuine user-submitted ratings (new `ratings` model in `packages/db/schema.prisma`, one row per user per course/instructor) rather than the originally-planned FCE-derived or dummy data — closer to what "rate a completed course" / "leave written feedback" actually call for. Validation (`ratingPatchSchema`) lives in `packages/profile/schema.ts` and is shared by both apps, same convention as the profile patch schema. Both course and instructor ratings are gated server-side on `profile.courses` having a matching `TAKEN` entry (an instructor rating additionally cross-checks `schedules.instructors` for that course, since professors have no stable id anywhere in this codebase — only free-text names).
+
+**Course Insights**
+- [x] View course ratings — average stars + count on the course page's new Ratings card
+- [x] Read student feedback — written comments listed
+- [x] "What I wish I knew before taking this course" — dedicated course-only field
+
+**Professor Insights**
+- [x] View professor ratings — same Ratings card, keyed by instructor name, on the instructor page
+- [x] Read professor feedback
+
+**Contribute**
+- [x] Rate a completed course — blocked unless the course is marked Taken on your profile
+- [x] Rate a professor — blocked unless you have a Taken course that instructor taught
+- [x] Leave written feedback — the comment field on either rating type
+- [ ] Aggregate workload/grading-fairness/transparency stats — not built; that data already exists separately via the FCE card on the same pages
 
 ## V4 (out of scope for now)
 
