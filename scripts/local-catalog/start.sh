@@ -82,10 +82,15 @@ done
 # --- 3. mongo + catalog -------------------------------------------------------------------
 log "starting MongoDB and loading the catalog (first load takes ~30s)"
 # Run the seeder from the cache dir: that is where mongodb-memory-server is installed, and
-# ESM resolves node_modules relative to the script's own location.
-cp "$REPO/scripts/local-catalog/seed.mjs" "$CACHE/seed.mjs"
+# ESM resolves bare-specifier imports (mongodb-memory-server) by walking up from the script's
+# own location. seed.mjs also imports ../catalog/load.mjs by relative path, so both files are
+# copied preserving that same relative layout - copying seed.mjs alone would leave that import
+# pointing outside the cache dir entirely.
+mkdir -p "$CACHE/scripts/catalog" "$CACHE/scripts/local-catalog"
+cp "$REPO/scripts/catalog/load.mjs" "$CACHE/scripts/catalog/load.mjs"
+cp "$REPO/scripts/local-catalog/seed.mjs" "$CACHE/scripts/local-catalog/seed.mjs"
 CATALOG_CACHE="$CACHE" MONGO_PORT="$MONGO_PORT" \
-  bun "$CACHE/seed.mjs" 2>&1 | sed 's/^/  /' &
+  bun "$CACHE/scripts/local-catalog/seed.mjs" 2>&1 | sed 's/^/  /' &
 PIDS+=($!)
 
 for _ in $(seq 1 90); do

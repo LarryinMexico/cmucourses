@@ -17,6 +17,7 @@
         "@typescript-eslint/eslint-plugin": "^5.62.0",
         "@typescript-eslint/parser": "^5.62.0",
         "eslint-config-prettier": "^8.10.0",
+        "mongodb": "^6.15.0",
         "nx": "19.6.3",
         "prettier": "^3.4.2",
         "typescript": "^5.7.2",

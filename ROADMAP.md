@@ -120,8 +120,21 @@ What the data *does* support is whether a course has a stated meeting time at al
 - [x] Leave written feedback — the comment field on either rating type
 - [ ] Aggregate workload/grading-fairness/transparency stats — not built; that data already exists separately via the FCE card on the same pages
 
-## V4 (out of scope for now)
+## V4
 
-### Scotty Circles
+### Scotty Circles — Partially done
 
-- Schedule sharing, social connections, interactive features (follow, schedule reactions, etc.)
+> Updated 2026-09-20: built ahead of V1-V3 being finished, so treat V1-V3's remaining gaps as
+> still the priority — this landing first doesn't move Circles up the roadmap. A directory of
+> other students' public profiles, publishing your active schedule to it, following other
+> students, and emoji reactions on a followed schedule (`packages/profile/social.ts`,
+> `apps/frontend/src/pages/circles.tsx`). The directory highlights courses and
+> careers/skills you share with each person (`ProfileCard` in `circles.tsx`).
+
+- [x] Schedule sharing — publish your active `userSchedules` schedule to your public profile
+  (`publishSocialSchedule`, `PATCH /user/social/schedule`)
+- [x] Social connections — follow another student's profile (`updateFollow`,
+  `PATCH /user/social/follow`)
+- [x] Interactive features: schedule reactions — emoji reactions (👍🎉🔥📚) on a followed
+  schedule (`updateScheduleReaction`, `PATCH /user/social/reaction`)
+- [ ] Anything beyond follow/react/publish (comments, messaging, notifications) — not built
