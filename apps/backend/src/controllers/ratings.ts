@@ -116,7 +116,9 @@ export const submitRating: RequestHandler<
     return;
   }
 
-  const { targetType, targetID, stars, comment, wishIKnew } = parsed.data;
+  const { targetType, targetID, stars, comment, wishIKnew, gradingFairness, transparency } = parsed.data;
+  // Workload asks about a course, so an instructor rating never keeps it.
+  const workload = targetType === "COURSE" ? (parsed.data.workload ?? null) : null;
 
   try {
     const profile = await db.profiles.findUnique({ where: { clerkUserId: res.locals.userId } });
@@ -142,7 +144,14 @@ export const submitRating: RequestHandler<
 
     const doc = await db.ratings.upsert({
       where: { clerkUserId_targetType_targetID: { clerkUserId: res.locals.userId, targetType, targetID } },
-      update: { stars, comment: comment ?? null, wishIKnew: wishIKnew ?? null },
+      update: {
+        stars,
+        comment: comment ?? null,
+        wishIKnew: wishIKnew ?? null,
+        workload,
+        gradingFairness: gradingFairness ?? null,
+        transparency: transparency ?? null,
+      },
       create: {
         clerkUserId: res.locals.userId,
         targetType,
@@ -150,6 +159,9 @@ export const submitRating: RequestHandler<
         stars,
         comment: comment ?? null,
         wishIKnew: wishIKnew ?? null,
+        workload,
+        gradingFairness: gradingFairness ?? null,
+        transparency: transparency ?? null,
       },
     });
     res.json(exclude(doc, "id"));

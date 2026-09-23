@@ -272,9 +272,13 @@ export type RatingTargetType = (typeof RATING_TARGET_TYPES)[number];
 
 export const RATING_LIMITS = { comment: 1000, wishIKnew: 1000 } as const;
 
+/** An optional 1-5 answer; null clears a previously given one. */
+const ratingScale = z.number().int().min(1).max(5).nullable();
+
 /**
- * Body of PATCH /user/rating. `wishIKnew` is accepted for either target type at the schema
- * level (Mongo has no per-branch cost) but the frontend only renders that field for courses.
+ * Body of PATCH /user/rating. `wishIKnew` and `workload` are accepted for either target type at the
+ * schema level (Mongo has no per-branch cost) but the frontend only renders them for courses, and
+ * the backend stores `workload` only on course ratings.
  */
 export const ratingPatchSchema = z
   .object({
@@ -283,6 +287,9 @@ export const ratingPatchSchema = z
     stars: z.number().int().min(1).max(5),
     comment: nullableText(RATING_LIMITS.comment).optional(),
     wishIKnew: nullableText(RATING_LIMITS.wishIKnew).optional(),
+    workload: ratingScale.optional(),
+    gradingFairness: ratingScale.optional(),
+    transparency: ratingScale.optional(),
   })
   .strict()
   .transform(({ targetType, targetID, ...rest }) => ({

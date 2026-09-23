@@ -30,6 +30,57 @@ const StarPicker = ({
   </div>
 );
 
+/**
+ * A 1-5 answer with named ends. Numbers rather than stars: for workload a higher number is not
+ * "better", and stars would say it is. Clearing sends null, which removes an earlier answer.
+ */
+const ScalePicker = ({
+  label,
+  low,
+  high,
+  value,
+  onChange,
+}: {
+  label: string;
+  low: string;
+  high: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) => (
+  <div>
+    <div className="flex flex-wrap items-baseline gap-2 text-gray-500">
+      <span className="text-gray-700">{label}</span>
+      <span className="text-gray-400 text-xs">
+        1 {low} · 5 {high}
+      </span>
+      {value !== null && (
+        <button
+          type="button"
+          className="text-gray-500 text-xs underline"
+          onClick={() => onChange(null)}
+        >
+          Clear
+        </button>
+      )}
+    </div>
+    <div className="mt-1 flex gap-1" role="group" aria-label={label}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          aria-pressed={value === n}
+          className={`h-7 w-7 rounded border text-gray-700 text-xs ${
+            value === n ? "border-blue-300 bg-blue-50" : "border-gray-200"
+          }`}
+          onClick={() => onChange(n)}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
 /** Star + optional comment (+ wishIKnew for courses) form, prefilled when editing an existing rating. */
 const RatingForm = ({
   targetType,
@@ -44,6 +95,15 @@ const RatingForm = ({
   const [stars, setStars] = useState(existing?.stars ?? 0);
   const [comment, setComment] = useState(existing?.comment ?? "");
   const [wishIKnew, setWishIKnew] = useState(existing?.wishIKnew ?? "");
+  const [workload, setWorkload] = useState<number | null>(
+    existing?.workload ?? null
+  );
+  const [gradingFairness, setGradingFairness] = useState<number | null>(
+    existing?.gradingFairness ?? null
+  );
+  const [transparency, setTransparency] = useState<number | null>(
+    existing?.transparency ?? null
+  );
   const [hydratedFrom, setHydratedFrom] = useState<string | null>(null);
 
   // existing arrives after mount via react-query — fill once when it lands.
@@ -54,12 +114,40 @@ const RatingForm = ({
     setStars(existing.stars);
     setComment(existing.comment ?? "");
     setWishIKnew(existing.wishIKnew ?? "");
+    setWorkload(existing.workload ?? null);
+    setGradingFairness(existing.gradingFairness ?? null);
+    setTransparency(existing.transparency ?? null);
     setHydratedFrom(key);
   }, [existing, hydratedFrom]);
 
   return (
     <div className="space-y-2 text-sm">
       <StarPicker value={stars} onChange={setStars} />
+      <div className="space-y-2">
+        {targetType === "COURSE" && (
+          <ScalePicker
+            label="Workload"
+            low="light"
+            high="heavy"
+            value={workload}
+            onChange={setWorkload}
+          />
+        )}
+        <ScalePicker
+          label="Grading fairness"
+          low="unfair"
+          high="fair"
+          value={gradingFairness}
+          onChange={setGradingFairness}
+        />
+        <ScalePicker
+          label="Transparency"
+          low="unclear"
+          high="clear"
+          value={transparency}
+          onChange={setTransparency}
+        />
+      </div>
       <textarea
         className="w-full rounded border border-gray-200 p-2 text-sm"
         rows={2}
@@ -89,6 +177,9 @@ const RatingForm = ({
             comment: comment.trim() || null,
             wishIKnew:
               targetType === "COURSE" ? wishIKnew.trim() || null : null,
+            workload: targetType === "COURSE" ? workload : null,
+            gradingFairness,
+            transparency,
           })
         }
         className={PRIMARY_BUTTON_CLASS}

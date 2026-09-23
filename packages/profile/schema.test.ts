@@ -245,4 +245,27 @@ describe("ratingPatchSchema", () => {
       false
     );
   });
+  describe("aggregate ratings", () => {
+    const base = { targetType: "COURSE", targetID: "15-122", stars: 4 } as const;
+
+    test("accepts workload, grading fairness and transparency from 1 to 5", () => {
+      const result = parseRating({ ...base, workload: 5, gradingFairness: 1, transparency: 3 });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data).toMatchObject({ workload: 5, gradingFairness: 1, transparency: 3 });
+    });
+
+    test("each one is optional and may be cleared with null", () => {
+      expect(parseRating(base).success).toBe(true);
+      expect(parseRating({ ...base, workload: null, gradingFairness: null, transparency: null }).success).toBe(true);
+    });
+
+    test("rejects values outside 1-5 and non-integers", () => {
+      for (const field of ["workload", "gradingFairness", "transparency"]) {
+        for (const value of [0, 6, -1, 2.5, "3"]) {
+          expect(parseRating({ ...base, [field]: value }).success).toBe(false);
+        }
+      }
+    });
+  });
 });

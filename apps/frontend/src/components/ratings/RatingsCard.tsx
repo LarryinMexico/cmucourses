@@ -2,16 +2,26 @@ import React from "react";
 import { StarIcon } from "@heroicons/react/24/solid";
 import { Card } from "~/components/Card";
 import { RatingTargetType, useFetchRatings } from "~/app/api/ratings";
+import { Average, summarizeRatings } from "~/app/ratings";
 import RateGate from "./RateGate";
 
-const average = (ratings: { stars: number }[]): number =>
-  ratings.length === 0 ? 0 : ratings.reduce((sum, r) => sum + r.stars, 0) / ratings.length;
+const StatRow = ({ label, hint, stat }: { label: string; hint: string; stat: Average }) => (
+  <div className="flex flex-wrap items-baseline justify-between gap-2">
+    <span className="text-gray-700">
+      {label} <span className="text-gray-400 text-xs">{hint}</span>
+    </span>
+    <span className="text-gray-500">
+      {stat.average === null ? "No data yet" : `${stat.average.toFixed(1)} / 5 (${stat.count})`}
+    </span>
+  </div>
+);
 
 /** Aggregate stars, written feedback, and (courses only) "wish I knew" list, plus the rate form. */
 const RatingsCard = ({ targetType, targetID }: { targetType: RatingTargetType; targetID: string }) => {
   const { data: ratings } = useFetchRatings(targetType, targetID);
   const list = ratings ?? [];
-  const avg = average(list);
+  const summary = summarizeRatings(list);
+  const avg = summary.stars.average ?? 0;
   const comments = list.filter((r) => r.comment);
   const wishIKnews = targetType === "COURSE" ? list.filter((r) => r.wishIKnew) : [];
 
@@ -28,6 +38,16 @@ const RatingsCard = ({ targetType, targetID }: { targetType: RatingTargetType; t
       </div>
 
       {list.length === 0 && <div className="mt-2 text-gray-400 text-sm">No ratings yet.</div>}
+
+      {list.length > 0 && (
+        <div className="mt-3 space-y-1 text-sm">
+          {targetType === "COURSE" && (
+            <StatRow label="Workload" hint="1 light, 5 heavy" stat={summary.workload} />
+          )}
+          <StatRow label="Grading fairness" hint="5 = fair" stat={summary.gradingFairness} />
+          <StatRow label="Transparency" hint="5 = clear" stat={summary.transparency} />
+        </div>
+      )}
 
       {comments.length > 0 && (
         <div className="mt-3">

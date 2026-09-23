@@ -133,18 +133,23 @@ enum RatingTargetType {
 }
 
 model ratings {
-  id          String           @id @default(auto()) @map("_id") @db.ObjectId
-  clerkUserId String
-  targetType  RatingTargetType
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId     String
+  targetType      RatingTargetType
   /// courseID for COURSE, instructor name string for INSTRUCTOR (professors have no stable id
   /// anywhere in this codebase - fces.instructor and schedules.instructors are both free-text names)
-  targetID    String
-  stars       Int
-  comment     String?
+  targetID        String
+  stars           Int
+  comment         String?
   /// courses only; UI-hidden for INSTRUCTOR, not schema-rejected
-  wishIKnew   String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  wishIKnew       String?
+  /// Optional 1-5 answers alongside `stars`. workload is a course-only question (1 light, 5 heavy);
+  /// documents written before these existed simply lack the fields and read back as null.
+  workload        Int?
+  gradingFairness Int?
+  transparency    Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@unique([clerkUserId, targetType, targetID])
   @@index([targetType, targetID])

@@ -13,6 +13,10 @@ export interface Rating {
   stars: number;
   comment: string | null;
   wishIKnew: string | null;
+  /** Optional 1-5 answers; workload is 1 light to 5 heavy and only asked for courses. */
+  workload?: number | null;
+  gradingFairness?: number | null;
+  transparency?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -23,6 +27,9 @@ export interface RatingInput {
   stars: number;
   comment?: string | null;
   wishIKnew?: string | null;
+  workload?: number | null;
+  gradingFairness?: number | null;
+  transparency?: number | null;
 }
 
 // Ratings need the same full-Mongo-access backend as the profile (see .env.template) — the
