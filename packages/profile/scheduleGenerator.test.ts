@@ -267,3 +267,152 @@ describe("generateSchedules", () => {
     expect(elapsed).toBeLessThan(1000);
   });
 });
+
+/** A lecture at one time, optionally with sections (each section is one extra time). */
+const lecture = (
+  name: string,
+  begin: string,
+  end: string,
+  days: number[],
+  sections: { name: string; begin: string; end: string; days: number[] }[] = []
+) => ({
+  name,
+  times: [{ days, begin, end }],
+  sections: sections.map((s) => ({ name: s.name, times: [{ days: s.days, begin: s.begin, end: s.end }] })),
+});
+
+describe("locks and excludes", () => {
+  const twoLectures: CandidateCourse = {
+    courseID: "15-213",
+    units: 12,
+    lectures: [lecture("Lec 1", "10:00AM", "10:50AM", [1, 3]), lecture("Lec 2", "02:00PM", "02:50PM", [2, 4])],
+  };
+
+  test("a lock pins the course to that option in every candidate", () => {
+    const result = generateSchedules({
+      ...baseInput,
+      courses: [twoLectures],
+      locks: [{ courseID: "15-213", lecture: "Lec 2", section: null }],
+    });
+    expect(result.length).toBeGreaterThan(0);
+    for (const candidate of result) expect(candidate.picks.map((p) => p.lecture)).toEqual(["Lec 2"]);
+  });
+
+  test("a lock can pin one section of a lecture", () => {
+    const course: CandidateCourse = {
+      courseID: "15-122",
+      units: 10,
+      lectures: [
+        lecture("Lec A", "09:00AM", "09:50AM", [1, 3], [
+          { name: "A1", begin: "11:00AM", end: "11:50AM", days: [5] },
+          { name: "A2", begin: "01:00PM", end: "01:50PM", days: [5] },
+        ]),
+      ],
+    };
+    const result = generateSchedules({
+      ...baseInput,
+      courses: [course],
+      locks: [{ courseID: "15-122", lecture: "Lec A", section: "A2" }],
+    });
+    expect(result.length).toBeGreaterThan(0);
+    for (const candidate of result) expect(candidate.picks[0]!.section).toBe("A2");
+  });
+
+  test("an excluded option never appears", () => {
+    const result = generateSchedules({
+      ...baseInput,
+      courses: [twoLectures],
+      excluded: [{ courseID: "15-213", lecture: "Lec 1", section: null }],
+    });
+    expect(result.length).toBeGreaterThan(0);
+    for (const candidate of result) expect(candidate.picks.map((p) => p.lecture)).toEqual(["Lec 2"]);
+  });
+
+  test("a lock that clashes with another course returns no schedule instead of overlapping classes", () => {
+    const fixed = simpleCourse("15-122", 10, "10:00AM", "10:50AM");
+    const flexible: CandidateCourse = {
+      courseID: "21-127",
+      units: 9,
+      lectures: [lecture("Lec 1", "10:00AM", "10:50AM", [1, 3]), lecture("Lec 2", "02:00PM", "02:50PM", [1, 3])],
+    };
+    expect(generateSchedules({ ...baseInput, courses: [fixed, flexible] })).not.toEqual([]);
+    expect(
+      generateSchedules({
+        ...baseInput,
+        courses: [fixed, flexible],
+        locks: [{ courseID: "21-127", lecture: "Lec 1", section: null }],
+      })
+    ).toEqual([]);
+  });
+
+  test("a lock pointing at an option that no longer exists is ignored and says so", () => {
+    const result = generateSchedules({
+      ...baseInput,
+      courses: [twoLectures],
+      locks: [{ courseID: "15-213", lecture: "Lec 9", section: null }],
+    });
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]!.picks).toHaveLength(1);
+    expect(result[0]!.reasons.some((r) => r.includes("15-213") && r.includes("Lec 9"))).toBe(true);
+  });
+
+  test("excluding every option of a course leaves it unscheduled with an accurate reason", () => {
+    const result = generateSchedules({
+      ...baseInput,
+      courses: [twoLectures],
+      excluded: [
+        { courseID: "15-213", lecture: "Lec 1", section: null },
+        { courseID: "15-213", lecture: "Lec 2", section: null },
+      ],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.picks).toHaveLength(0);
+    expect(result[0]!.reasons.some((r) => r.includes("15-213") && /exclud/i.test(r) && !/No schedule data/.test(r))).toBe(
+      true
+    );
+  });
+});
+
+describe("candidate scores", () => {
+  test("exposes the four component scores that totalScore is built from", () => {
+    const result = generateSchedules({
+      ...baseInput,
+      courses: [simpleCourse("15-213", 12, "10:00AM", "10:50AM")],
+      workload: { unitsMin: 30, unitsMax: 40, hoursPerWeek: null },
+    });
+    const candidate = result[0]!;
+    // no busy blocks -> availability UNKNOWN (50); 12 units is under a 30-40 target
+    expect(candidate.scores.availability).toBe(50);
+    expect(candidate.workloadFit).toBe("UNDER");
+    expect(candidate.scores.workload).toBeLessThan(100);
+    expect(candidate.scores.career).toBe(candidate.careerScore);
+    expect(candidate.scores.preference).toBe(candidate.preferenceScore);
+    const { availability, workload, career, preference } = candidate.scores;
+    expect(candidate.totalScore).toBeCloseTo(0.35 * availability + 0.25 * workload + 0.2 * career + 0.2 * preference, 6);
+  });
+
+  test("unknown workload scores 100, not the 75 the candidate card used to show", () => {
+    const result = generateSchedules({ ...baseInput, courses: [simpleCourse("15-213", 12, "10:00AM", "10:50AM")] });
+    expect(result[0]!.workloadFit).toBe("UNKNOWN");
+    expect(result[0]!.scores.workload).toBe(100);
+  });
+});
+
+describe("beam pruning", () => {
+  test("keeps the one schedule that avoids every busy block when 625 combinations compete for 200 slots", () => {
+    // Four courses, five lectures each (Mon..Fri), one distinct hour per course, so courses never
+    // clash with each other. Mon-Thu are busy all day, so only the all-Friday combination fits.
+    const courses: CandidateCourse[] = Array.from({ length: 4 }, (_, index) => {
+      const hour = String(8 + index).padStart(2, "0");
+      return {
+        courseID: `10-${200 + index}`,
+        units: 9,
+        lectures: Array.from({ length: 5 }, (_, day) => lecture(`Lec ${day}`, `${hour}:00AM`, `${hour}:50AM`, [day + 1])),
+      };
+    });
+    const busyBlocks = [1, 2, 3, 4].map((day) => block(day, 7 * 60, 20 * 60));
+    const result = generateSchedules({ ...baseInput, courses, busyBlocks });
+    expect(result[0]!.availability.status).toBe("FITS");
+    expect(result[0]!.picks.every((p) => p.lecture === "Lec 4")).toBe(true);
+  });
+});

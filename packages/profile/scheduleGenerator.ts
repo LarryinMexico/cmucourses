@@ -28,6 +28,13 @@ export interface CandidateCourse {
   lectures: GenLecture[];
 }
 
+/** Identifies one attendable option of a course: a lecture, plus a section if it has any. */
+export interface SectionRef {
+  courseID: string;
+  lecture: string;
+  section: string | null;
+}
+
 export interface GeneratorInput {
   courses: CandidateCourse[];
   busyBlocks: BusyBlock[];
@@ -39,6 +46,10 @@ export interface GeneratorInput {
   preferences: SchedulePreferences;
   preferredModality: Modality | null;
   maxCandidates?: number;
+  /** Options the student pinned. A locked course only considers its matching option(s). */
+  locks?: readonly SectionRef[];
+  /** Options the student ruled out. They are removed before any lock is applied. */
+  excluded?: readonly SectionRef[];
 }
 
 export interface SectionPick {
@@ -57,6 +68,8 @@ export interface ScheduleCandidate {
   workloadFit: WorkloadFit;
   careerScore: number;
   preferenceScore: number;
+  /** The four 0-100 components `totalScore` is the weighted sum of. */
+  scores: { availability: number; workload: number; career: number; preference: number };
   totalScore: number;
   reasons: string[];
 }
@@ -94,20 +107,58 @@ interface Option {
   lecture: string;
   section: string | null;
   times: MeetingTime[];
+  /** Clashes with the student's busy blocks; scored once here rather than per partial schedule. */
+  busy: boolean;
 }
 
-const optionsFor = (course: CandidateCourse): Option[] => {
+const optionsFor = (course: CandidateCourse, busyBlocks: BusyBlock[]): Option[] => {
   const options: Option[] = [];
+  const add = (lecture: string, section: string | null, times: MeetingTime[]) =>
+    options.push({
+      lecture,
+      section,
+      times,
+      busy: availabilityFit([times], busyBlocks).status === "CONFLICTS",
+    });
   for (const lecture of course.lectures) {
     if (lecture.sections.length === 0) {
-      options.push({ lecture: lecture.name, section: null, times: lecture.times });
+      add(lecture.name, null, lecture.times);
     } else {
-      for (const section of lecture.sections) {
-        options.push({ lecture: lecture.name, section: section.name, times: [...lecture.times, ...section.times] });
-      }
+      for (const section of lecture.sections) add(lecture.name, section.name, [...lecture.times, ...section.times]);
     }
   }
   return options;
+};
+
+const matchesRef = (option: Option, ref: SectionRef): boolean =>
+  option.lecture === ref.lecture && option.section === ref.section;
+
+interface ResolvedOptions {
+  options: Option[];
+  /** Locks for this course that match no remaining option (the section was removed, or excluded). */
+  staleLocks: SectionRef[];
+  /** The student excluded everything this course offers. */
+  allExcluded: boolean;
+}
+
+/** Applies excludes, then locks, to one course's options. A lock that matches nothing is ignored. */
+const resolveOptions = (
+  course: CandidateCourse,
+  busyBlocks: BusyBlock[],
+  locks: readonly SectionRef[],
+  excluded: readonly SectionRef[]
+): ResolvedOptions => {
+  const all = optionsFor(course, busyBlocks);
+  const remaining = all.filter((option) => !excluded.some((ref) => ref.courseID === course.courseID && matchesRef(option, ref)));
+  const courseLocks = locks.filter((ref) => ref.courseID === course.courseID);
+  const locked = remaining.filter((option) => courseLocks.some((ref) => matchesRef(option, ref)));
+  const staleLocks = courseLocks.filter((ref) => !remaining.some((option) => matchesRef(option, ref)));
+
+  return {
+    options: locked.length > 0 ? locked : remaining,
+    staleLocks,
+    allExcluded: all.length > 0 && remaining.length === 0,
+  };
 };
 
 const timePairOverlaps = (a: MeetingTime, b: MeetingTime): boolean => {
@@ -129,19 +180,23 @@ interface PartialSchedule {
   picks: SectionPick[];
   usedTimes: MeetingTime[];
   unscheduled: string[];
+  /** Picks that clash with the student's busy blocks. */
+  busyClashes: number;
 }
 
-/** Cheap heuristic for beam pruning: fewer courses forced into an unscheduled/conflicting pick wins. */
-const partialScore = (partial: PartialSchedule): number => -partial.unscheduled.length;
+/** Heuristic for beam pruning: fewer unscheduled courses, then fewer busy-block clashes, wins. */
+const partialScore = (partial: PartialSchedule): number => -partial.unscheduled.length - partial.busyClashes;
 
-const buildPartials = (courses: CandidateCourse[]): PartialSchedule[] => {
+const buildPartials = (courses: CandidateCourse[], optionsByCourse: ReadonlyMap<string, Option[]>): PartialSchedule[] => {
   // Most-constrained-first: fewer options to try first narrows the beam faster.
-  const sorted = [...courses].sort((a, b) => optionsFor(a).length - optionsFor(b).length);
+  const sorted = [...courses].sort(
+    (a, b) => (optionsByCourse.get(a.courseID)?.length ?? 0) - (optionsByCourse.get(b.courseID)?.length ?? 0)
+  );
 
-  let partials: PartialSchedule[] = [{ picks: [], usedTimes: [], unscheduled: [] }];
+  let partials: PartialSchedule[] = [{ picks: [], usedTimes: [], unscheduled: [], busyClashes: 0 }];
 
   for (const course of sorted) {
-    const options = optionsFor(course);
+    const options = optionsByCourse.get(course.courseID) ?? [];
     if (options.length === 0) {
       partials = partials.map((p) => ({ ...p, unscheduled: [...p.unscheduled, course.courseID] }));
       continue;
@@ -158,6 +213,7 @@ const buildPartials = (courses: CandidateCourse[]): PartialSchedule[] => {
           ],
           usedTimes: [...partial.usedTimes, ...option.times],
           unscheduled: partial.unscheduled,
+          busyClashes: partial.busyClashes + (option.busy ? 1 : 0),
         });
       }
     }
@@ -320,7 +376,8 @@ const similarity = (a: SectionPick[], b: SectionPick[]): number => {
 const buildCandidate = (
   partial: PartialSchedule,
   { busyBlocks, workload, careers, skillsWant, skillsHave, preferences, preferredModality }: GeneratorInput,
-  unitsByCourse: ReadonlyMap<string, number>
+  unitsByCourse: ReadonlyMap<string, number>,
+  allExcluded: ReadonlySet<string>
 ): ScheduleCandidate => {
   const conflicts: string[] = [];
   let availabilitySum = 0;
@@ -342,7 +399,11 @@ const buildCandidate = (
   }
 
   for (const courseID of partial.unscheduled) {
-    reasons.push(`No schedule data for ${courseID}; excluded from this candidate`);
+    reasons.push(
+      allExcluded.has(courseID)
+        ? `Every option for ${courseID} is excluded; it is left out of this candidate`
+        : `No schedule data for ${courseID}; excluded from this candidate`
+    );
   }
 
   const count = partial.picks.length || 1;
@@ -377,6 +438,7 @@ const buildCandidate = (
     workloadFit,
     careerScore,
     preferenceScore,
+    scores: { availability: availabilityScore, workload: workloadScore, career: careerScore, preference: preferenceScore },
     totalScore,
     reasons,
   };
@@ -386,7 +448,21 @@ export const generateSchedules = (input: GeneratorInput): ScheduleCandidate[] =>
   if (input.courses.length === 0) return [];
 
   const unitsByCourse = new Map(input.courses.map((c) => [c.courseID, c.units]));
-  const partials = buildPartials(input.courses);
+
+  const optionsByCourse = new Map<string, Option[]>();
+  const allExcluded = new Set<string>();
+  const staleLockNotes: string[] = [];
+  for (const course of input.courses) {
+    const resolved = resolveOptions(course, input.busyBlocks, input.locks ?? [], input.excluded ?? []);
+    optionsByCourse.set(course.courseID, resolved.options);
+    if (resolved.allExcluded) allExcluded.add(course.courseID);
+    for (const ref of resolved.staleLocks) {
+      const which = ref.section === null ? ref.lecture : `${ref.lecture} / ${ref.section}`;
+      staleLockNotes.push(`${course.courseID} ${which} is locked but no longer available; the lock was ignored`);
+    }
+  }
+
+  const partials = buildPartials(input.courses, optionsByCourse);
 
   const seen = new Set<string>();
   const candidates: ScheduleCandidate[] = [];
@@ -394,7 +470,9 @@ export const generateSchedules = (input: GeneratorInput): ScheduleCandidate[] =>
     const sig = pickSignature(partial.picks);
     if (seen.has(sig)) continue;
     seen.add(sig);
-    candidates.push(buildCandidate(partial, input, unitsByCourse));
+    const candidate = buildCandidate(partial, input, unitsByCourse, allExcluded);
+    candidate.reasons.push(...staleLockNotes);
+    candidates.push(candidate);
   }
 
   candidates.sort(
