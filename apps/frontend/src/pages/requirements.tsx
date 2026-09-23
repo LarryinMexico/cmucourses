@@ -16,6 +16,7 @@ import Link from "~/components/Link";
 import { Card } from "~/components/Card";
 import ProgressBar from "~/components/ProgressBar";
 import { PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
+import { PlanSemesters } from "~/components/profile/PlanSemesters";
 import { useFetchProfile } from "~/app/api/profile";
 import { useFetchCourseInfos } from "~/app/api/course";
 import { displayUnits } from "~/app/utils";
@@ -253,20 +254,11 @@ const GenericRequirementsPlanner = ({ profile }: { profile: Profile }) => {
             <Link href="/profile#plan">Profile</Link>.
           </p>
         ) : (
-          <div className="mt-2 space-y-2">
-            {profile.plannedCourses.map((course) => (
-              <div
-                key={`${course.year}:${course.semester}:${course.courseID}`}
-                className="flex justify-between text-gray-700 text-sm"
-              >
-                <Link href={`/course/${course.courseID}`}>
-                  {course.courseID}
-                </Link>
-                <span className="capitalize text-gray-400">
-                  {course.semester} {course.year}
-                </span>
-              </div>
-            ))}
+          <div className="mt-2">
+            <PlanSemesters
+              planned={profile.plannedCourses}
+              workload={profile.workload}
+            />
           </div>
         )}
       </Card>

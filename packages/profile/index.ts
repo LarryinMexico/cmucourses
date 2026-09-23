@@ -6,5 +6,6 @@ export * from "./taxonomy/colleges";
 export * from "./mapping";
 export * from "./availability";
 export * from "./scheduleGenerator";
+export * from "./plan";
 export * from "./requirements";
 export * from "./social";

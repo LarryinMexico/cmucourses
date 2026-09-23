@@ -232,7 +232,8 @@ const buildPartials = (courses: CandidateCourse[], optionsByCourse: ReadonlyMap<
   return partials;
 };
 
-const workloadFitFor = (totalUnits: number, workload: Workload | null): { fit: WorkloadFit; score: number } => {
+/** How a semester's unit total sits against the profile's range; shared by the schedule generator and the course plan. */
+export const workloadFitFor = (totalUnits: number, workload: Workload | null): { fit: WorkloadFit; score: number } => {
   const min = workload?.unitsMin ?? null;
   const max = workload?.unitsMax ?? null;
   if (min === null && max === null) return { fit: "UNKNOWN", score: 100 };

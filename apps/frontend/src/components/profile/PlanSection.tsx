@@ -1,23 +1,20 @@
 import React, { useState } from "react";
-import { XMarkIcon } from "@heroicons/react/20/solid";
 import {
   LIMITS,
   PlannedCourse,
   Profile,
   ProfileSemester,
 } from "@cmucourses/profile";
-import Link from "~/components/Link";
-import { useCourseNames } from "~/app/api/course";
 import { CoursePicker } from "./CoursePicker";
 import { ProfileSection, useDraft } from "./ProfileSection";
 import { SECONDARY_BUTTON_CLASS, Select } from "./fields";
 import { PLAN_YEAR_OPTIONS, SEMESTER_OPTIONS } from "./options";
+import { PlanSemesters, sameEntry } from "./PlanSemesters";
 
 const currentYear = String(new Date().getFullYear());
 
 export const PlanSection = ({ profile }: { profile: Profile }) => {
   const { draft, setDraft, dirty } = useDraft(profile.plannedCourses);
-  const { data: names } = useCourseNames();
   const [adding, setAdding] = useState<{
     courseID: string | null;
     semester: ProfileSemester;
@@ -31,17 +28,7 @@ export const PlanSection = ({ profile }: { profile: Profile }) => {
       semester: adding.semester,
       year: adding.year,
     };
-    setDraft([
-      ...draft.filter(
-        (course) =>
-          !(
-            course.courseID === next.courseID &&
-            course.semester === next.semester &&
-            course.year === next.year
-          )
-      ),
-      next,
-    ]);
+    setDraft([...draft.filter((course) => !sameEntry(course, next)), next]);
     setAdding({ ...adding, courseID: null });
   };
 
@@ -57,55 +44,34 @@ export const PlanSection = ({ profile }: { profile: Profile }) => {
       {draft.length === 0 && (
         <div className="text-gray-400 text-sm">No planned courses yet.</div>
       )}
-      <ul className="divide-y divide-gray-100">
-        {[...draft]
-          .sort((a, b) =>
-            `${a.year}:${a.semester}:${a.courseID}`.localeCompare(
-              `${b.year}:${b.semester}:${b.courseID}`
-            )
-          )
-          .map((course) => (
-            <li
-              key={`${course.year}:${course.semester}:${course.courseID}`}
-              className="flex items-center gap-2 py-2 text-gray-700 text-sm"
-            >
-              <div className="min-w-0 flex-1 truncate">
-                <Link href={`/course/${course.courseID}`}>
-                  {course.courseID}
-                </Link>
-                <span className="ml-2">{names?.get(course.courseID)}</span>
-              </div>
-              <span className="capitalize text-gray-500">
-                {course.semester} {course.year}
-              </span>
-              <button
-                type="button"
-                aria-label={`Remove ${course.courseID} from plan`}
-                className="rounded p-1 text-gray-500 hover:bg-gray-50"
-                onClick={() =>
-                  setDraft(
-                    draft.filter(
-                      (item) =>
-                        !(
-                          item.courseID === course.courseID &&
-                          item.semester === course.semester &&
-                          item.year === course.year
-                        )
-                    )
-                  )
-                }
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </li>
-          ))}
-      </ul>
+      <PlanSemesters
+        planned={draft}
+        workload={profile.workload}
+        onRemove={(course) =>
+          setDraft(draft.filter((item) => !sameEntry(item, course)))
+        }
+      />
+      {draft.length > 0 &&
+        profile.workload?.unitsMin == null &&
+        profile.workload?.unitsMax == null && (
+          <div className="text-gray-400 text-xs">
+            Set a units range under Course load to check each semester against
+            it.
+          </div>
+        )}
       {draft.length < LIMITS.plannedCourses && (
         <div className="flex flex-wrap items-center gap-2">
           <CoursePicker
             value={adding.courseID}
             onChange={(courseID) => setAdding({ ...adding, courseID })}
-            exclude={draft.map((course) => course.courseID)}
+            // Only what is already in the chosen semester: the same course may go in another one.
+            exclude={draft
+              .filter(
+                (course) =>
+                  course.semester === adding.semester &&
+                  course.year === adding.year
+              )
+              .map((course) => course.courseID)}
           />
           <Select
             inline
