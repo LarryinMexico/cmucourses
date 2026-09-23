@@ -3,10 +3,13 @@ import {
   COMMENT_LIMITS,
   commentDeleteSchema,
   commentInputSchema,
+  MESSAGE_LIMITS,
   followInputSchema,
   profileIDSchema,
   publishedScheduleSchema,
   reactionInputSchema,
+  sendMessageSchema,
+  threadQuerySchema,
 } from "./social";
 
 describe("social schemas", () => {
@@ -67,5 +70,26 @@ describe("comment schemas", () => {
     expect(commentDeleteSchema.safeParse({ commentID: profileID }).success).toBe(true);
     const bad = commentDeleteSchema.safeParse({ commentID: "12" });
     expect(!bad.success && bad.error.issues[0]?.message).toBe("Invalid comment ID");
+  });
+});
+
+describe("message schemas", () => {
+  const profileID = "64b7f0c2a1d3e4f5a6b7c8d9";
+
+  test("trims the body and accepts up to the limit", () => {
+    expect(sendMessageSchema.parse({ profileID, body: "  hey  " }).body).toBe("hey");
+    expect(sendMessageSchema.safeParse({ profileID, body: "x".repeat(MESSAGE_LIMITS.body) }).success).toBe(true);
+  });
+
+  test("rejects an empty or too long message and unknown keys", () => {
+    for (const body of ["", "  \n", "x".repeat(MESSAGE_LIMITS.body + 1)]) {
+      expect(sendMessageSchema.safeParse({ profileID, body }).success).toBe(false);
+    }
+    expect(sendMessageSchema.safeParse({ profileID, body: "hi", recipientUserId: "user_x" }).success).toBe(false);
+  });
+
+  test("a thread is opened by profile id", () => {
+    expect(threadQuerySchema.safeParse({ profileID }).success).toBe(true);
+    expect(threadQuerySchema.safeParse({ profileID: "nope" }).success).toBe(false);
   });
 });

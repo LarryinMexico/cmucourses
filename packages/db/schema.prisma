@@ -306,3 +306,18 @@ model scheduleComments {
 
   @@index([targetProfileId, createdAt])
 }
+
+model directMessages {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// The two Clerk user ids, sorted and joined with ":". Server-only; never sent to clients.
+  conversationKey String
+  senderUserId    String
+  recipientUserId String
+  body            String
+  createdAt       DateTime  @default(now())
+  /// Set when the recipient opens the conversation.
+  readAt          DateTime?
+
+  @@index([conversationKey, createdAt])
+  @@index([recipientUserId, readAt])
+}

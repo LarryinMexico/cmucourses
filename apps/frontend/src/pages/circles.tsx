@@ -7,7 +7,11 @@ import {
   type PublishedSchedule,
   type SocialDirectoryProfile,
 } from "@cmucourses/profile";
-import { ChatBubbleLeftIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  ChatBubbleLeftIcon,
+  ChatBubbleLeftRightIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import { Page } from "~/components/Page";
 import { Card } from "~/components/Card";
 import Link from "~/components/Link";
@@ -28,6 +32,9 @@ import {
   PRIMARY_BUTTON_CLASS,
 } from "~/components/profile/fields";
 import { Pill } from "~/components/CourseTags";
+import MessagesCard, {
+  type OpenConversation,
+} from "~/components/circles/MessagesCard";
 
 const toPublishedSchedule = (
   schedule: ReturnType<typeof selectActiveUserSchedule>
@@ -148,10 +155,12 @@ const ProfileCard = ({
   person,
   ownCourses,
   ownInterests,
+  onMessage,
 }: {
   person: SocialDirectoryProfile;
   ownCourses: ReadonlySet<string>;
   ownInterests: ReadonlySet<string>;
+  onMessage: () => void;
 }) => {
   const follow = useToggleFollow();
   const react = useReactToSchedule();
@@ -192,6 +201,17 @@ const ProfileCard = ({
           {person.following ? "Connected" : "Connect"}
         </button>
       </div>
+
+      {person.following && person.followsMe && (
+        <button
+          type="button"
+          className="mt-3 flex items-center gap-1 text-gray-500 text-xs"
+          onClick={onMessage}
+        >
+          <ChatBubbleLeftRightIcon className="h-4 w-4" />
+          Message
+        </button>
+      )}
 
       {commonCourses.length > 0 && (
         <div className="mt-3">
@@ -284,6 +304,8 @@ const CirclesContent = () => {
   const published = directory?.me.publishedSchedule ?? null;
   const activeSchedule = useAppSelector(selectActiveUserSchedule);
   const publish = usePublishSocialSchedule();
+  const [openConversation, setOpenConversation] =
+    useState<OpenConversation | null>(null);
   const [studyPartnersOnly, setStudyPartnersOnly] = useState(false);
   const [similarInterestsOnly, setSimilarInterestsOnly] = useState(false);
 
@@ -394,6 +416,8 @@ const CirclesContent = () => {
         )}
       </Card>
 
+      <MessagesCard open={openConversation} onOpen={setOpenConversation} />
+
       {friendCourses.length > 0 && (
         <Card>
           <Card.Header>Courses discovered through connections</Card.Header>
@@ -448,6 +472,13 @@ const CirclesContent = () => {
               person={person}
               ownCourses={ownCourses}
               ownInterests={ownInterests}
+              onMessage={() =>
+                setOpenConversation({
+                  profileID: person.profileID,
+                  displayName: person.displayName,
+                  canSend: true,
+                })
+              }
             />
           ))}
         </div>

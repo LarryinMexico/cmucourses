@@ -39,6 +39,17 @@ export const commentDeleteSchema = z
   .object({ commentID: z.string().regex(/^[a-f\d]{24}$/i, "Invalid comment ID") })
   .strict();
 
+export const MESSAGE_LIMITS = { body: 1000 } as const;
+
+export const sendMessageSchema = z
+  .object({
+    profileID: profileIDSchema,
+    body: z.string().trim().min(1, "Write a message first").max(MESSAGE_LIMITS.body, "Message is too long"),
+  })
+  .strict();
+
+export const threadQuerySchema = z.object({ profileID: profileIDSchema }).strict();
+
 export const publishScheduleInputSchema = z.object({ schedule: publishedScheduleSchema.nullable() }).strict();
 
 export const followInputSchema = z
@@ -98,4 +109,21 @@ export interface ScheduleComment {
   createdAt: string;
   /** The caller wrote it, or owns the schedule it is on. */
   canDelete: boolean;
+}
+
+export interface DirectMessage {
+  messageID: string;
+  body: string;
+  createdAt: string;
+  fromMe: boolean;
+}
+
+/** One row of the message list: the latest message with someone, and what you have not read. */
+export interface ConversationSummary {
+  profileID: string;
+  displayName: string;
+  lastMessage: { body: string; createdAt: string; fromMe: boolean };
+  unreadCount: number;
+  /** You follow each other right now. History stays readable after an unfollow, but sending stops. */
+  canSend: boolean;
 }

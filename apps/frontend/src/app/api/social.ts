@@ -10,7 +10,7 @@ import {
 import { showToast } from "~/components/Toast";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 
-const backendUrl = () =>
+export const backendUrl = () =>
   process.env.NEXT_PUBLIC_PROFILE_BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   "";
