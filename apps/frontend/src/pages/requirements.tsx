@@ -329,7 +329,10 @@ const RequirementsContent = () => {
   ];
   const progress = degreeProgress(majorID, takenCourses)!;
   const coreCourseIDs = new Set(major.core.flatMap((r) => r.options));
-  const takenCourseIDs = profile.courses.map((c) => c.courseID);
+  const completedCourseIDs = profile.courses
+    .filter((c) => c.status === "TAKEN")
+    .map((c) => c.courseID);
+  const plannedCourseIDs = profile.plannedCourses.map((c) => c.courseID);
 
   return (
     <div className="m-auto max-w-4xl space-y-4 p-6">
@@ -360,7 +363,7 @@ const RequirementsContent = () => {
           <ElectiveUnits
             requiredUnits={progress.electiveUnitsRequired}
             coreCourseIDs={coreCourseIDs}
-            takenCourseIDs={takenCourseIDs}
+            takenCourseIDs={completedCourseIDs}
           />
         </div>
       </Card>
@@ -372,7 +375,11 @@ const RequirementsContent = () => {
             careers={profile.careers}
             skillsWant={profile.skillsWant}
             skillsHave={profile.skillsHave}
-            excludeCourseIDs={[...coreCourseIDs, ...takenCourseIDs]}
+            excludeCourseIDs={[
+              ...coreCourseIDs,
+              ...profile.courses.map((c) => c.courseID),
+              ...plannedCourseIDs,
+            ]}
           />
         </div>
       </Card>

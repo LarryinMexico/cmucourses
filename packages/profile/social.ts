@@ -46,6 +46,8 @@ export interface SocialDirectoryProfile {
   profileID: string;
   displayName: string;
   bio: string | null;
+  /** College + major labels when academic visibility is public; otherwise empty. */
+  academicSummary: string | null;
   careers: string[];
   skills: string[];
   currentCourseIDs: string[];

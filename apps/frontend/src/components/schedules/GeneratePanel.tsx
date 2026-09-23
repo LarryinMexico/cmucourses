@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { emptyProfile } from "@cmucourses/profile";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import { useFetchCourseInfos } from "~/app/api/course";
@@ -31,6 +31,11 @@ const GeneratePanel = () => {
     null
   );
 
+  // Drop stale options when the semester or course list changes.
+  useEffect(() => {
+    setCandidates(null);
+  }, [selectedSession, scheduled.join(",")]);
+
   const generate = () => {
     const input = buildGeneratorInput(
       scheduled,
@@ -43,6 +48,25 @@ const GeneratePanel = () => {
 
   const useCandidate = (candidate: ScheduleCandidate) => {
     dispatch(userSchedulesSlice.actions.setActiveScheduleCourses(scheduled));
+    const picked = new Set(candidate.picks.map((pick) => pick.courseID));
+    // Clear leftover lecture/section picks from a previous semester for courses not in this result.
+    for (const courseID of scheduled) {
+      if (picked.has(courseID)) continue;
+      dispatch(
+        userSchedulesSlice.actions.updateActiveScheduleCourseSession({
+          courseID,
+          sessionType: "Lecture",
+          session: "",
+        })
+      );
+      dispatch(
+        userSchedulesSlice.actions.updateActiveScheduleCourseSession({
+          courseID,
+          sessionType: "Section",
+          session: "",
+        })
+      );
+    }
     for (const pick of candidate.picks) {
       dispatch(
         userSchedulesSlice.actions.updateActiveScheduleCourseSession({
@@ -51,15 +75,13 @@ const GeneratePanel = () => {
           session: pick.lecture,
         })
       );
-      if (pick.section) {
-        dispatch(
-          userSchedulesSlice.actions.updateActiveScheduleCourseSession({
-            courseID: pick.courseID,
-            sessionType: "Section",
-            session: pick.section,
-          })
-        );
-      }
+      dispatch(
+        userSchedulesSlice.actions.updateActiveScheduleCourseSession({
+          courseID: pick.courseID,
+          sessionType: "Section",
+          session: pick.section || "",
+        })
+      );
     }
     dispatch(
       userSchedulesSlice.actions.setActiveScheduleGeneratedMeta({
@@ -79,7 +101,7 @@ const GeneratePanel = () => {
         </div>
       ) : selectedSession === "" ? (
         <div className="text-gray-400 text-sm">
-          Pick a semester below first.
+          Pick a semester in the Semester dropdown above first.
         </div>
       ) : (
         <button

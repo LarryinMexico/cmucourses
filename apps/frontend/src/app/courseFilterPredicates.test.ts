@@ -51,17 +51,16 @@ describe("courseMatchesClientFilters", () => {
     ).toBe(false);
   });
 
-  test("infers remote modality from catalog locations", () => {
+  test("Monday-only keeps Mon+Wed meetings (any-day match)", () => {
     expect(
-      courseMatchesClientFilters(
-        course("CMU REMOTE"),
-        { modalities: ["REMOTE"] },
-        []
-      )
+      courseMatchesClientFilters(course(), { meetingDays: [1] }, [])
     ).toBe(true);
+  });
+
+  test("fit availability with no busy blocks does not hide courses", () => {
     expect(
-      courseMatchesClientFilters(course(), { modalities: ["REMOTE"] }, [])
-    ).toBe(false);
+      courseMatchesClientFilters(course(), { fitAvailability: true }, [])
+    ).toBe(true);
   });
 
   test("filters to courses that fit saved availability", () => {
@@ -75,6 +74,55 @@ describe("courseMatchesClientFilters", () => {
         { day: 1, begin: 10 * 60, end: 11 * 60, label: null },
         { day: 3, begin: 10 * 60, end: 11 * 60, label: null },
       ])
+    ).toBe(false);
+  });
+
+  test("scopes to Offered-in sessions when provided", () => {
+    const withOld = course();
+    withOld.schedules = [
+      {
+        courseID: "15-213",
+        year: "2020",
+        semester: "fall",
+        lectures: [
+          {
+            name: "Lec 1",
+            instructors: [],
+            location: "Pittsburgh",
+            times: [
+              {
+                days: [1],
+                begin: "10:00AM",
+                end: "10:50AM",
+                building: "WEH",
+                room: "1",
+              },
+            ],
+          },
+        ],
+        sections: [],
+      },
+      ...(withOld.schedules || []),
+    ];
+    expect(
+      courseMatchesClientFilters(
+        withOld,
+        {
+          meetingDays: [1],
+          sessions: [{ year: "2026", semester: "fall" }],
+        },
+        []
+      )
+    ).toBe(true);
+    expect(
+      courseMatchesClientFilters(
+        withOld,
+        {
+          meetingDays: [1],
+          sessions: [{ year: "2021", semester: "fall" }],
+        },
+        []
+      )
     ).toBe(false);
   });
 });

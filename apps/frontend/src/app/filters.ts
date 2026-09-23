@@ -129,9 +129,11 @@ export const filtersSlice = createSlice({
             session.semester === action.payload.semester
           )
       );
+      if (state.semesters.sessions.length === 0) state.semesters.active = false;
     },
     updateSemesters: (state, action: PayloadAction<Session[]>) => {
       state.semesters.sessions = action.payload;
+      if (action.payload.length === 0) state.semesters.active = false;
     },
     updateUnitsActive: (state, action: PayloadAction<boolean>) => {
       state.units.active = action.payload;
@@ -145,25 +147,32 @@ export const filtersSlice = createSlice({
     },
     updateLevelsSelection: (state, action: PayloadAction<boolean[]>) => {
       state.levels.selected = action.payload;
+      if (!action.payload.some(Boolean)) state.levels.active = false;
     },
     deleteLevel: (state, action: PayloadAction<number[]>) => {
       for (const index of action.payload) {
         state.levels.selected[index] = false;
       }
+      if (!state.levels.selected.some(Boolean)) state.levels.active = false;
     },
     updateClassTimesActive: (state, action: PayloadAction<boolean>) => {
       state.classTimes.active = action.payload;
     },
     updateClassTimes: (state, action: PayloadAction<ClassTime[]>) => {
       state.classTimes.selected = action.payload;
+      if (action.payload.length === 0) state.classTimes.active = false;
     },
     deleteClassTime: (state, action: PayloadAction<ClassTime>) => {
       state.classTimes.selected = state.classTimes.selected.filter(
         (classTime) => classTime !== action.payload
       );
+      if (state.classTimes.selected.length === 0) state.classTimes.active = false;
     },
     updateMeetingDays: (state, action: PayloadAction<number[]>) => {
-      state.meetingDays = { active: true, selected: action.payload };
+      state.meetingDays = {
+        active: action.payload.length > 0,
+        selected: action.payload,
+      };
     },
     updateMeetingDaysActive: (state, action: PayloadAction<boolean>) => {
       state.meetingDays.active = action.payload;
@@ -179,7 +188,8 @@ export const filtersSlice = createSlice({
       state.timeRange.active = action.payload;
     },
     updateModalities: (state, action: PayloadAction<Modality[]>) => {
-      state.modalities = { active: true, selected: action.payload };
+      // Kept for persisted Redux state; modality filter UI was removed (catalog has no reliable field).
+      state.modalities = { active: action.payload.length > 0, selected: action.payload };
     },
     updateModalitiesActive: (state, action: PayloadAction<boolean>) => {
       state.modalities.active = action.payload;

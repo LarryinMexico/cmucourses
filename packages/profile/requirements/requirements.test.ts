@@ -98,6 +98,16 @@ describe("degreeProgress", () => {
     expect(techStrategy.status).toBe("UNMET");
   });
 
+  test("IN_PROGRESS on a later option outranks PLANNED on an earlier option", () => {
+    const progress = degreeProgress("mism", [
+      { courseID: "95-874", status: "PLANNED" },
+      { courseID: "95-706", status: "IN_PROGRESS" },
+    ])!;
+    const choice = progress.requirements.find((r) => r.requirement.id === "design-elective")!;
+    expect(choice.status).toBe("IN_PROGRESS");
+    expect(choice.satisfiedBy).toBe("95-706");
+  });
+
   test("courses that satisfy no requirement don't affect core progress", () => {
     const progress = degreeProgress("mism", [{ courseID: "15-122", status: "TAKEN" }])!;
     expect(progress.coreUnitsEarned).toBe(0);

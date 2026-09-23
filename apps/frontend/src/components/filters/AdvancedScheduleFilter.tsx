@@ -1,5 +1,4 @@
-import React from "react";
-import type { Modality } from "@cmucourses/profile";
+import React, { useEffect } from "react";
 import { filtersSlice } from "~/app/filters";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import { useFetchProfile } from "~/app/api/profile";
@@ -9,12 +8,6 @@ import {
   timeToMinutes,
 } from "~/components/profile/options";
 import { INPUT_CLASS } from "~/components/profile/fields";
-
-const MODALITIES: { value: Modality; label: string }[] = [
-  { value: "IN_PERSON", label: "In person" },
-  { value: "REMOTE", label: "Remote" },
-  { value: "HYBRID", label: "Hybrid" },
-];
 
 const AdvancedScheduleFilter = () => {
   const dispatch = useAppDispatch();
@@ -27,13 +20,19 @@ const AdvancedScheduleFilter = () => {
     begin: 8 * 60,
     end: 18 * 60,
   };
-  const modalities = useAppSelector((state) => state.filters.modalities) ?? {
-    active: false,
-    selected: [],
-  };
   const fitAvailability =
     useAppSelector((state) => state.filters.fitAvailability) ?? false;
-  const { data: profile } = useFetchProfile();
+  const { data: profile, isPending: profilePending } = useFetchProfile();
+  const hasBusyBlocks = !!profile && profile.busyBlocks.length > 0;
+
+  // Persisted "fit" with no busy blocks would filter everything out and leave the
+  // checkbox stuck disabled — clear it when we know the profile has none.
+  useEffect(() => {
+    if (profilePending) return;
+    if (!hasBusyBlocks && fitAvailability) {
+      dispatch(filtersSlice.actions.updateFitAvailability(false));
+    }
+  }, [profilePending, hasBusyBlocks, fitAvailability, dispatch]);
 
   return (
     <div className="space-y-3 text-gray-500 text-sm">
@@ -65,7 +64,7 @@ const AdvancedScheduleFilter = () => {
                       filtersSlice.actions.updateMeetingDays(
                         e.target.checked
                           ? [...meetingDays.selected, value].sort()
-                          : meetingDays.selected.filter((day) => day !== value)
+                          : meetingDays.selected.filter((d) => d !== value)
                       )
                     )
                   }
@@ -118,48 +117,12 @@ const AdvancedScheduleFilter = () => {
           />
         </div>
       </div>
-      <div>
-        <label>
-          <input
-            type="checkbox"
-            className="mr-2"
-            checked={modalities.active}
-            onChange={(e) =>
-              dispatch(
-                filtersSlice.actions.updateModalitiesActive(e.target.checked)
-              )
-            }
-          />
-          Modality
-        </label>
-        <div className="mt-1 flex flex-wrap gap-2 pl-5">
-          {MODALITIES.map(({ value, label }) => (
-            <label key={value}>
-              <input
-                type="checkbox"
-                className="mr-1"
-                checked={modalities.selected.includes(value)}
-                onChange={(e) =>
-                  dispatch(
-                    filtersSlice.actions.updateModalities(
-                      e.target.checked
-                        ? [...modalities.selected, value]
-                        : modalities.selected.filter((item) => item !== value)
-                    )
-                  )
-                }
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-      </div>
       <label className="block">
         <input
           type="checkbox"
           className="mr-2"
           checked={fitAvailability}
-          disabled={!profile || profile.busyBlocks.length === 0}
+          disabled={!hasBusyBlocks}
           onChange={(e) =>
             dispatch(
               filtersSlice.actions.updateFitAvailability(e.target.checked)
@@ -168,7 +131,7 @@ const AdvancedScheduleFilter = () => {
         />
         Only courses that fit my availability
       </label>
-      {(!profile || profile.busyBlocks.length === 0) && (
+      {!hasBusyBlocks && (
         <div className="pl-5 text-gray-400 text-xs">
           Add weekly busy times on your Profile to enable this filter.
         </div>

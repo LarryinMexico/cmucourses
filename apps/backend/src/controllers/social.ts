@@ -5,6 +5,9 @@ import {
   publishScheduleInputSchema,
   reactionInputSchema,
   SOCIAL_REACTIONS,
+  COLLEGES,
+  MAJORS,
+  labelOf,
   type SocialDirectoryProfile,
   type SocialReaction,
 } from "@cmucourses/profile";
@@ -57,6 +60,17 @@ export const getSocialDirectory: RequestHandler<
           profileID: profile.id,
           displayName: profile.displayName || "CMU student",
           bio: profile.bio,
+          academicSummary:
+            profile.visibility.academic === "PUBLIC" && profile.academic
+              ? [
+                  profile.academic.college
+                    ? labelOf(COLLEGES, profile.academic.college)
+                    : null,
+                  ...profile.academic.majors.map((id) => labelOf(MAJORS, id)),
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || null
+              : null,
           careers: profile.visibility.careers === "PUBLIC" ? profile.careers : [],
           skills: profile.visibility.skills === "PUBLIC" ? [...profile.skillsHave, ...profile.skillsWant] : [],
           currentCourseIDs:

@@ -31,6 +31,48 @@ type ClassTime = keyof typeof CLASS_TIME_PATTERNS;
 
 const isClassTime = (value: string): value is ClassTime => value in CLASS_TIME_PATTERNS;
 
+/** Aggregation expression: catalog "HH:MMAM"/"HH:MMPM" -> minutes after midnight, else null. */
+const catalogTimeToMinutes = (timeExpr: string): Prisma.InputJsonValue =>
+  ({
+    $let: {
+      vars: {
+        t: timeExpr,
+        hour: { $toInt: { $substrBytes: [timeExpr, 0, 2] } },
+        minute: { $toInt: { $substrBytes: [timeExpr, 3, 2] } },
+        meridiem: { $toUpper: { $substrBytes: [timeExpr, 5, 2] } },
+      },
+      in: {
+        $cond: [
+          {
+            $not: {
+              $regexMatch: { input: "$$t", regex: "^\\d{2}:\\d{2}(AM|PM)$" },
+            },
+          },
+          null,
+          {
+            $add: [
+              "$$minute",
+              {
+                $multiply: [
+                  60,
+                  {
+                    $cond: [
+                      { $eq: ["$$meridiem", "PM"] },
+                      {
+                        $cond: [{ $eq: ["$$hour", 12] }, 12, { $add: ["$$hour", 12] }],
+                      },
+                      { $cond: [{ $eq: ["$$hour", 12] }, 0, "$$hour"] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+  }) as Prisma.InputJsonValue;
+
 export interface GetCourseById {
   params: {
     courseID: string;
@@ -114,6 +156,11 @@ export interface GetFilteredCourses {
     session?: SingleOrArray<string>;
     /** Time-of-day buckets: "morning" | "afternoon" | "evening" | "tba". */
     classTimes?: SingleOrArray<string>;
+    /** Weekday numbers 0=Sun..6=Sat; any selected day on a meeting matches. */
+    meetingDays?: SingleOrArray<string>;
+    /** Exact window in minutes after midnight; the whole meeting must fit inside. */
+    timeBegin?: string;
+    timeEnd?: string;
     fces?: BoolLiteral;
   };
 }
@@ -199,10 +246,34 @@ export const getFilteredCourses: RequestHandler<
       ? []
       : singleToArray(req.query.classTimes).filter(isClassTime);
 
-  // The session and class-time filters both read the joined schedules, so the lookup has to
-  // run whenever either is active - not only when the caller asked for schedules to be
-  // returned. Without it they would silently match nothing.
-  if (fromBoolLiteral(req.query.schedules) || sessions.length > 0 || classTimes.length > 0)
+  const meetingDays =
+    req.query.meetingDays === undefined
+      ? []
+      : singleToArray(req.query.meetingDays)
+          .map((day) => parseInt(day, 10))
+          .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+
+  const timeBegin =
+    req.query.timeBegin === undefined ? undefined : parseInt(req.query.timeBegin, 10);
+  const timeEnd =
+    req.query.timeEnd === undefined ? undefined : parseInt(req.query.timeEnd, 10);
+  const hasTimeWindow =
+    timeBegin !== undefined &&
+    timeEnd !== undefined &&
+    !Number.isNaN(timeBegin) &&
+    !Number.isNaN(timeEnd);
+
+  const needsScheduleLookup =
+    fromBoolLiteral(req.query.schedules) ||
+    sessions.length > 0 ||
+    classTimes.length > 0 ||
+    meetingDays.length > 0 ||
+    hasTimeWindow;
+
+  // Session / class-time / meeting-days / time-window all read joined schedules, so the
+  // lookup runs whenever any of them is active — not only when the caller asked for
+  // schedules to be returned. Without it they would silently match nothing.
+  if (needsScheduleLookup)
     pipeline.push({
       $lookup: {
         from: "schedules",
@@ -212,9 +283,9 @@ export const getFilteredCourses: RequestHandler<
       },
     });
 
-  // Both predicates go inside one $elemMatch so they have to hold for the *same* schedule
-  // document. Applied separately, a course with a morning lecture in 2020 and an evening one
-  // this fall would wrongly satisfy "morning" + "fall 2026" together.
+  // All schedule predicates must hold for the *same* schedule document. Applied separately,
+  // a course with a morning lecture in 2020 and an evening one this fall would wrongly
+  // satisfy "morning" + "fall 2026" together.
   const scheduleClauses: Record<string, unknown>[] = [];
 
   if (sessions.length > 0) scheduleClauses.push({ $or: sessions });
@@ -228,6 +299,16 @@ export const getFilteredCourses: RequestHandler<
     });
   }
 
+  // Any selected weekday on a meeting matches (Mon+Wed survives a Monday-only filter).
+  if (meetingDays.length > 0) {
+    scheduleClauses.push({
+      $or: [
+        { "lectures.times.days": { $in: meetingDays } },
+        { "sections.times.days": { $in: meetingDays } },
+      ],
+    });
+  }
+
   // Guarding on a non-empty list also keeps an all-malformed `session` query from emitting
   // `$or: []`, which Mongo rejects outright.
   if (scheduleClauses.length > 0) {
@@ -235,6 +316,116 @@ export const getFilteredCourses: RequestHandler<
       $match: {
         schedules: {
           $elemMatch: { $and: scheduleClauses },
+        },
+      },
+    } as Prisma.InputJsonValue);
+  }
+
+  // Exact time window needs minute math on "HH:MMAM" strings, so it goes through $expr.
+  // Re-apply session / classTimes / meetingDays here so the window cannot be satisfied by a
+  // different historical offering than the $elemMatch above.
+  if (hasTimeWindow) {
+    const meetingsOf = (schedVar: string) => ({
+      $concatArrays: [
+        { $ifNull: [`$$${schedVar}.lectures`, []] },
+        { $ifNull: [`$$${schedVar}.sections`, []] },
+      ],
+    });
+
+    const timeFits = (timeVar: string) => ({
+      $let: {
+        vars: {
+          beginM: catalogTimeToMinutes(`$$${timeVar}.begin`),
+          endM: catalogTimeToMinutes(`$$${timeVar}.end`),
+        },
+        in: {
+          $and: [
+            { $ne: ["$$beginM", null] },
+            { $ne: ["$$endM", null] },
+            { $gte: ["$$beginM", timeBegin] },
+            { $lte: ["$$endM", timeEnd] },
+          ],
+        },
+      },
+    });
+
+    const anyTime = (pred: (timeVar: string) => unknown) => ({
+      $anyElementTrue: {
+        $map: {
+          input: meetingsOf("sched"),
+          as: "mtg",
+          in: {
+            $anyElementTrue: {
+              $map: {
+                input: { $ifNull: ["$$mtg.times", []] },
+                as: "t",
+                in: pred("t"),
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const scheduleConds: unknown[] = [anyTime(timeFits)];
+
+    if (sessions.length > 0) {
+      scheduleConds.push({
+        $or: sessions.map((session) => ({
+          $and: [
+            { $eq: ["$$sched.year", session.year] },
+            { $eq: ["$$sched.semester", session.semester] },
+          ],
+        })),
+      });
+    }
+
+    if (classTimes.length > 0) {
+      scheduleConds.push({
+        $or: classTimes.map((classTime) =>
+          anyTime((timeVar) => ({
+            $regexMatch: {
+              input: `$$${timeVar}.begin`,
+              regex: CLASS_TIME_PATTERNS[classTime],
+            },
+          }))
+        ),
+      });
+    }
+
+    if (meetingDays.length > 0) {
+      scheduleConds.push(
+        anyTime((timeVar) => ({
+          $gt: [
+            {
+              $size: {
+                $setIntersection: [
+                  { $ifNull: [`$$${timeVar}.days`, []] },
+                  meetingDays,
+                ],
+              },
+            },
+            0,
+          ],
+        }))
+      );
+    }
+
+    pipeline.push({
+      $match: {
+        $expr: {
+          $gt: [
+            {
+              $size: {
+                $filter: {
+                  input: "$schedules",
+                  as: "sched",
+                  cond: { $and: scheduleConds },
+                },
+              },
+            },
+            0,
+          ],
         },
       },
     } as Prisma.InputJsonValue);

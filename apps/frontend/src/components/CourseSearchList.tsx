@@ -18,34 +18,42 @@ import type { Course } from "~/app/types";
 
 const PAGE_SIZE = 10;
 
-const useClientFilteredCourses = (courses: Course[]) => {
+/** Client-side only: fit-availability, plus meeting/time for Match-my-goals lists (no /search). */
+const useClientFilteredCourses = (
+  courses: Course[],
+  opts: { includeScheduleFilters: boolean }
+) => {
   const meetingDays = useAppSelector((state) => state.filters.meetingDays);
   const timeRange = useAppSelector((state) => state.filters.timeRange);
-  const modalities = useAppSelector((state) => state.filters.modalities);
   const fitAvailability = useAppSelector(
     (state) => state.filters.fitAvailability
   );
-  const { data: profile } = useFetchProfile();
+  const semesters = useAppSelector((state) => state.filters.semesters);
+  const { data: profile, isPending: profilePending } = useFetchProfile();
 
   return useMemo(() => {
+    const sessions =
+      semesters?.active && semesters.sessions.length > 0
+        ? semesters.sessions
+        : undefined;
     const filters: ClientCourseFilters = {
+      sessions,
       meetingDays:
-        meetingDays?.active && meetingDays.selected.length > 0
+        opts.includeScheduleFilters &&
+        meetingDays?.active &&
+        meetingDays.selected.length > 0
           ? meetingDays.selected
           : undefined,
-      timeRange: timeRange?.active
-        ? { begin: timeRange.begin, end: timeRange.end }
-        : undefined,
-      modalities:
-        modalities?.active && modalities.selected.length > 0
-          ? modalities.selected
+      timeRange:
+        opts.includeScheduleFilters && timeRange?.active
+          ? { begin: timeRange.begin, end: timeRange.end }
           : undefined,
-      fitAvailability: fitAvailability ?? false,
+      // Skip while profile is loading so a rehydrated flag does not empty the list.
+      fitAvailability: !profilePending && (fitAvailability ?? false),
     };
     const enabled =
       filters.meetingDays !== undefined ||
       filters.timeRange !== undefined ||
-      filters.modalities !== undefined ||
       filters.fitAvailability;
     if (!enabled) return courses;
     return courses.filter((course) =>
@@ -53,11 +61,13 @@ const useClientFilteredCourses = (courses: Course[]) => {
     );
   }, [
     courses,
+    opts.includeScheduleFilters,
     meetingDays,
     timeRange,
-    modalities,
     fitAvailability,
+    semesters,
     profile?.busyBlocks,
+    profilePending,
   ]);
 };
 
@@ -67,7 +77,9 @@ const CoursePage = ({ courseIDs }: { courseIDs: string[] }) => {
   const showSchedules = useAppSelector((state) => state.user.showSchedules);
 
   const results = useFetchCourseInfos(courseIDs);
-  const filteredResults = useClientFilteredCourses(results);
+  const filteredResults = useClientFilteredCourses(results, {
+    includeScheduleFilters: true,
+  });
   const filteredIDs = new Set(filteredResults.map((course) => course.courseID));
   const visibleCourseIDs = courseIDs.filter((courseID) =>
     filteredIDs.has(courseID)
@@ -133,7 +145,10 @@ const SearchCoursePage = () => {
   }, [exactResultsCourses, docs, page]);
 
   const results = useFetchCourseInfos(coursesToShow);
-  const filteredResults = useClientFilteredCourses(results);
+  // Meeting days / time window are server-side on /search; only fit-availability stays here.
+  const filteredResults = useClientFilteredCourses(results, {
+    includeScheduleFilters: false,
+  });
   const filteredIDs = new Set(filteredResults.map((course) => course.courseID));
   const visibleCourses = coursesToShow.filter((courseID) =>
     filteredIDs.has(courseID)

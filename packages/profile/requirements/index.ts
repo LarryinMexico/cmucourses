@@ -53,8 +53,9 @@ export interface TakenCourse {
 
 /**
  * Matches the student's taken/in-progress courses against a major's core requirements. A choice
- * requirement (multiple `options`) is satisfied by whichever option the student took; if they
- * took more than one, TAKEN wins over IN_PROGRESS, and the first match otherwise.
+ * requirement (multiple `options`) is satisfied by the best status among its options:
+ * TAKEN > IN_PROGRESS > PLANNED. If several options share the best status, the first in the
+ * handbook list wins.
  */
 export const degreeProgress = (majorID: string, courses: readonly TakenCourse[]): DegreeProgress | null => {
   const major = requirementsForMajor(majorID);
@@ -72,17 +73,16 @@ export const degreeProgress = (majorID: string, courses: readonly TakenCourse[])
 
   const requirements: RequirementStatus[] = major.core.map((requirement) => {
     let best: RequirementStatus = { requirement, satisfiedBy: null, status: "UNMET" };
+    const rank = { UNMET: 0, PLANNED: 1, IN_PROGRESS: 2, TAKEN: 3 } as const;
     for (const option of requirement.options) {
       const status = byCourseID.get(option);
+      if (!status) continue;
       if (status === "TAKEN") {
         best = { requirement, satisfiedBy: option, status: "TAKEN" };
         break; // TAKEN is the best possible status - no need to keep looking
       }
-      if (status === "IN_PROGRESS" && best.status === "UNMET") {
-        best = { requirement, satisfiedBy: option, status: "IN_PROGRESS" };
-      }
-      if (status === "PLANNED" && best.status === "UNMET") {
-        best = { requirement, satisfiedBy: option, status: "PLANNED" };
+      if (rank[status] > rank[best.status]) {
+        best = { requirement, satisfiedBy: option, status };
       }
     }
     return best;

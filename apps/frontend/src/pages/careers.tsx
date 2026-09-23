@@ -148,19 +148,20 @@ const AlternativeAcademicPaths = () => {
   const { data: profile } = useFetchProfile();
   if (!profile || profile.careers.length === 0) return null;
 
+  // Same skill base as Your progress: taken + in-progress only. Planned courses are not yet learned.
   const progress = careerProgress({
     careers: profile.careers,
     skillsHave: profile.skillsHave,
-    takenCourseIDs: [
-      ...profile.courses.map((course) => course.courseID),
-      ...profile.plannedCourses.map((course) => course.courseID),
-    ],
+    takenCourseIDs: profile.courses.map((course) => course.courseID),
   });
   const paths = [0, 1, 2]
     .map((optionIndex) => [
       ...new Set(
         progress.flatMap((career) =>
-          career.gaps.flatMap((gap) => gap.courseIDs[optionIndex] ?? [])
+          career.gaps.flatMap((gap) => {
+            const courseID = gap.courseIDs[optionIndex];
+            return courseID ? [courseID] : [];
+          })
         )
       ),
     ])

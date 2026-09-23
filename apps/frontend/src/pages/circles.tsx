@@ -65,6 +65,9 @@ const ProfileCard = ({
       <div className="flex items-start justify-between gap-3">
         <div>
           <Card.Header>{person.displayName}</Card.Header>
+          {person.academicSummary && (
+            <p className="mt-1 text-gray-500 text-xs">{person.academicSummary}</p>
+          )}
           {person.bio && (
             <p className="mt-1 text-gray-500 text-sm">{person.bio}</p>
           )}
@@ -258,7 +261,7 @@ const CirclesContent = () => {
           >
             Publish active planned schedule
           </button>
-          {(published || !isPending) && (
+          {published && (
             <button
               type="button"
               className="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-600"
@@ -318,8 +321,9 @@ const CirclesContent = () => {
         <div className="text-gray-400">Loading people…</div>
       ) : visiblePeople.length === 0 ? (
         <div className="text-gray-400 text-sm">
-          No matching public profiles yet. Profiles appear here after another
-          student makes at least one profile section public.
+          {people.length > 0 && (studyPartnersOnly || similarInterestsOnly)
+            ? "No one matches these filters. Try clearing Study partners or Similar interests."
+            : "No matching public profiles yet. Profiles appear here after another student makes at least one profile section public."}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

@@ -36,12 +36,12 @@ const fetchCourseInfosByPage = async (
     filters.departments.names.forEach((d) => params.append("department", d));
   }
 
-  if (filters.units.active) {
+  if (filters.units.active && (filters.units.min !== 0 || filters.units.max !== 24)) {
     params.append("unitsMin", filters.units.min.toString());
     params.append("unitsMax", filters.units.max.toString());
   }
 
-  if (filters.semesters.active) {
+  if (filters.semesters.active && filters.semesters.sessions.length > 0) {
     filters.semesters.sessions.forEach((s: Session) =>
       params.append("session", JSON.stringify(s))
     );
@@ -51,6 +51,17 @@ const fetchCourseInfosByPage = async (
     filters.classTimes.selected.forEach((classTime) =>
       params.append("classTimes", classTime)
     );
+  }
+
+  if (filters.meetingDays.active && filters.meetingDays.selected.length > 0) {
+    filters.meetingDays.selected.forEach((day) =>
+      params.append("meetingDays", day.toString())
+    );
+  }
+
+  if (filters.timeRange.active) {
+    params.append("timeBegin", filters.timeRange.begin.toString());
+    params.append("timeEnd", filters.timeRange.end.toString());
   }
 
   if (filters.levels.active) {

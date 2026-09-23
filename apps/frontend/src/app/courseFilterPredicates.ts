@@ -3,14 +3,15 @@ import {
   meetingGroupsFor,
   parseCatalogTime,
   type BusyBlock,
-  type Modality,
 } from "@cmucourses/profile";
-import type { Course, Schedule, Time } from "./types";
+import type { Course, Schedule, Session, Time } from "./types";
+import { compareSessions, filterSessions } from "./utils";
 
 export interface ClientCourseFilters {
   meetingDays?: number[];
   timeRange?: { begin: number; end: number };
-  modalities?: Modality[];
+  /** When set, only judge these offerings (Offered in). Otherwise most recent. */
+  sessions?: Session[];
   fitAvailability?: boolean;
 }
 
@@ -19,23 +20,20 @@ const allTimes = (schedule: Schedule): Time[] => [
   ...schedule.sections.flatMap((section) => section.times || []),
 ];
 
-const modalityFor = (schedule: Schedule): Modality | null => {
-  const locations = [...schedule.lectures, ...schedule.sections]
-    .flatMap((meeting) =>
-      meeting.times.length > 0
-        ? meeting.times.map((time) =>
-            `${meeting.location ?? ""} ${time.building ?? ""} ${time.room ?? ""}`.trim()
-          )
-        : [meeting.location ?? ""]
-    )
-    .filter(Boolean);
-  if (locations.length === 0) return null;
-  const remote = locations.filter((location) =>
-    /remote|online|zoom/i.test(location)
-  ).length;
-  if (remote === locations.length) return "REMOTE";
-  if (remote > 0) return "HYBRID";
-  return "IN_PERSON";
+const schedulesInScope = (
+  schedules: Schedule[],
+  sessions: Session[] | undefined
+): Schedule[] => {
+  if (sessions && sessions.length > 0) {
+    const keys = new Set(
+      sessions.map((session) => `${session.year}-${session.semester}`)
+    );
+    return schedules.filter((schedule) =>
+      keys.has(`${schedule.year}-${schedule.semester}`)
+    );
+  }
+  const mostRecent = filterSessions(schedules).sort(compareSessions)[0];
+  return mostRecent ? [mostRecent] : [];
 };
 
 const meetingMatches = (
@@ -43,7 +41,12 @@ const meetingMatches = (
   days: number[] | undefined,
   range: ClientCourseFilters["timeRange"]
 ) => {
-  if (days && days.length > 0 && !time.days.every((day) => days.includes(day)))
+  // Any selected weekday on the slot is enough (Mon+Wed survives Monday-only).
+  if (
+    days &&
+    days.length > 0 &&
+    !time.days.some((day) => days.includes(day))
+  )
     return false;
   if (!range) return true;
   const begin = parseCatalogTime(time.begin);
@@ -58,11 +61,11 @@ export const courseMatchesClientFilters = (
   filters: ClientCourseFilters,
   busyBlocks: BusyBlock[]
 ): boolean => {
-  const schedules = course.schedules ?? [];
-  if (schedules.length === 0) return false;
+  const scoped = schedulesInScope(course.schedules ?? [], filters.sessions);
+  if (scoped.length === 0) return false;
 
   if (filters.meetingDays || filters.timeRange) {
-    const matches = schedules.some((schedule) =>
+    const matches = scoped.some((schedule) =>
       allTimes(schedule).some((time) =>
         meetingMatches(time, filters.meetingDays, filters.timeRange)
       )
@@ -70,19 +73,10 @@ export const courseMatchesClientFilters = (
     if (!matches) return false;
   }
 
-  if (filters.modalities && filters.modalities.length > 0) {
-    if (
-      !schedules.some((schedule) => {
-        const modality = modalityFor(schedule);
-        return modality !== null && filters.modalities?.includes(modality);
-      })
-    )
-      return false;
-  }
-
+  // No busy times (or profile still loading) → do not hide everything.
   if (filters.fitAvailability) {
-    if (busyBlocks.length === 0) return false;
-    const fits = schedules.some((schedule) => {
+    if (busyBlocks.length === 0) return true;
+    const fits = scoped.some((schedule) => {
       const groups = meetingGroupsFor(schedule.lectures, schedule.sections);
       return availabilityFit(groups, busyBlocks).status === "FITS";
     });

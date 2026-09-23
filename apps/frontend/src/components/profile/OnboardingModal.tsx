@@ -1,4 +1,4 @@
-import React, { Fragment, useState } from "react";
+import React, { Fragment, useEffect, useState } from "react";
 import {
   Dialog,
   DialogPanel,
@@ -29,9 +29,18 @@ export const OnboardingModal = () => {
   const [academic, setAcademic] = useState<Academic>(EMPTY_ACADEMIC);
   const [careers, setCareers] = useState<string[]>([]);
   const [dismissed, setDismissed] = useState(false);
+  const [seeded, setSeeded] = useState(false);
 
   const open =
     !!isSignedIn && !!profile && profile.onboardedAt === null && !dismissed;
+
+  // Seed once from whatever is already on the profile (user may have saved on /profile first).
+  useEffect(() => {
+    if (!profile || seeded) return;
+    setAcademic(profile.academic ?? EMPTY_ACADEMIC);
+    setCareers(profile.careers ?? []);
+    setSeeded(true);
+  }, [profile, seeded]);
 
   // Overlay / Esc only hides for this session; only "Skip for now" writes completeOnboarding.
   const dismissForSession = () => setDismissed(true);
@@ -43,7 +52,13 @@ export const OnboardingModal = () => {
 
   const finish = () => {
     setDismissed(true);
-    update.mutate({ academic, careers, completeOnboarding: true });
+    // Only PATCH sections the modal actually edits, seeded from profile so Finish never
+    // wipes data the user already saved on the Profile page.
+    update.mutate({
+      academic,
+      careers,
+      completeOnboarding: true,
+    });
   };
 
   return (
