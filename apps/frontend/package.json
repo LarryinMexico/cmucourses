@@ -75,6 +75,7 @@
     "eslint-config-prettier": "^10.1.8",
     "jest": "^30.0.5",
     "jest-css-modules-transform": "^4.4.2",
+    "jest-environment-jsdom": "^30",
     "next-transpile-modules": "^10.0.1",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
