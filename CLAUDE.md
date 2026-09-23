@@ -30,6 +30,8 @@ bunx jest path/to/file.test.ts   # single test file
 
 `packages/profile` has its own tests (`bun test` from that package): mapping, availability, careerProgress, requirements, scheduleGenerator, schema, social.
 
+`scheduleGenerator.ts` takes optional `locks` / `excluded` (`SectionRef` = course + lecture + section). Excludes are applied first, then locks: a course with a lock only considers the matching option(s), and a lock that matches nothing left (section gone, or excluded) is ignored with a note appended to each candidate's `reasons`. Excluding every option of a course leaves it unscheduled with its own reason. Each candidate carries `scores` (availability/workload/career/preference, 0-100); `totalScore` is their weighted sum and the UI's progress bars read `scores` rather than re-deriving anything. Beam pruning ranks partial schedules by unscheduled courses plus busy-block clashes, computed once per option. In the frontend, the Generate panel keeps locks, excludes, option count and a units range in component state only, nothing is written to the profile.
+
 Prisma client generation lives in `packages/db` (`bun run db-generate`, `db-migrate` = `prisma db push`, `db-validate` = `prisma format`). Nx `targetDefaults` make `dev` and `build` depend on `^db-generate`, so the client is generated automatically for those; CI generates it explicitly before linting. If imports from `@cmucourses/db` fail to resolve, run `db-generate` first.
 
 CI (`.github/workflows/lint.yml`, on PRs) = generate prisma client → eslint + `tsc --noEmit` for both apps. `next.config.mjs` sets `typescript.ignoreBuildErrors` and `eslint.ignoreDuringBuilds`, so a green `next build` proves nothing about types — run `tsc --noEmit` yourself.

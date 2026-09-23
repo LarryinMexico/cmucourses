@@ -5,11 +5,21 @@ import {
   type GeneratorInput,
   type Profile,
   type ScheduleCandidate,
+  type SectionRef,
 } from "@cmucourses/profile";
 import { Course, Schedule } from "~/app/types";
 import { isValidUnits, parseUnits, sessionToString } from "~/app/utils";
 
-export type { ScheduleCandidate } from "@cmucourses/profile";
+export type { ScheduleCandidate, SectionRef } from "@cmucourses/profile";
+
+/** Per-run adjustments the student makes in the Generate panel; none of it is saved to the profile. */
+export interface RefineOptions {
+  locks?: readonly SectionRef[];
+  excluded?: readonly SectionRef[];
+  maxCandidates?: number;
+  /** Replaces the profile's units-per-semester range for this run only. */
+  unitsRange?: { min: number | null; max: number | null };
+}
 
 const toGenLectures = (schedule: Schedule | undefined): GenLecture[] => {
   if (!schedule) return [];
@@ -36,7 +46,8 @@ export const buildGeneratorInput = (
   courseIDs: string[],
   courseDetails: Course[],
   selectedSession: string,
-  profile: Profile
+  profile: Profile,
+  refine: RefineOptions = {}
 ): GeneratorInput => {
   const courses: CandidateCourse[] = courseIDs.map((courseID) => {
     const course = courseDetails.find((c) => c.courseID === courseID);
@@ -53,12 +64,21 @@ export const buildGeneratorInput = (
   return {
     courses,
     busyBlocks: profile.busyBlocks,
-    workload: profile.workload,
+    workload: refine.unitsRange
+      ? {
+          unitsMin: refine.unitsRange.min,
+          unitsMax: refine.unitsRange.max,
+          hoursPerWeek: profile.workload?.hoursPerWeek ?? null,
+        }
+      : profile.workload,
     careers: profile.careers,
     skillsWant: profile.skillsWant,
     skillsHave: profile.skillsHave,
     preferences: profile.schedulePreferences,
     preferredModality: profile.modality,
+    locks: refine.locks,
+    excluded: refine.excluded,
+    maxCandidates: refine.maxCandidates,
   };
 };
 

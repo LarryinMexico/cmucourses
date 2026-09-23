@@ -101,7 +101,7 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
 **Compare & Refine**
 - [x] Compare schedule options — up to 3 candidates shown with a score breakdown (availability / workload / career fit)
 - [x] See why each schedule was recommended — per-candidate `reasons` text (time conflicts, unit-range fit, skills it builds toward)
-- [ ] Adjust course preferences and regenerate based on changes — not built; re-running Generate starts over rather than tweaking in place
+- [x] Adjust course preferences and regenerate based on changes — each pick on a candidate can be **locked** (kept on the next run) or **excluded** (never chosen), shown as removable chips above a **Regenerate** button; the panel also takes an option count (1-3) and a units range for this run only. Locks and exclusions live in the panel's component state (not saved to the profile or Redux) and are cleared when the semester changes. No new preference types were added: "course preferences" here means which sections to keep or rule out, not a saved preference profile
 
 **Finalize**
 - [x] Select a preferred schedule — "Use this schedule" fills the existing manual builder's lecture/section selections
@@ -152,4 +152,3 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
 
 - Circles: the page's `published` state starts as `null` on every load (`circles.tsx`), so it does not know you already published; the directory endpoint (`controllers/social.ts`) does not check that a profile has any public section, contradicting the page's empty-state text.
 - The backend has no tests (rating gating and the social controllers are unverified by anything but manual use).
-- Schedule generator UI: the candidate card's workload/availability bars use their own lookup tables instead of the generator's scores, so they can disagree with the total (e.g. unknown workload is 100 in the generator, 75 on the card).
