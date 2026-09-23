@@ -10,6 +10,7 @@ import { getGeneds } from "~/controllers/geneds";
 import { getSchedules } from "~/controllers/schedules";
 import { getOwnRating, getRatings, submitRating } from "~/controllers/ratings";
 import { getSocialDirectory, publishSocialSchedule, updateFollow, updateScheduleReaction } from "~/controllers/social";
+import { addComment, deleteComment, listComments } from "~/controllers/comments";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -50,6 +51,8 @@ app.route("/social/directory").post(requireUser, getSocialDirectory);
 app.route("/user/social/schedule").patch(requireUser, publishSocialSchedule);
 app.route("/user/social/follow").patch(requireUser, updateFollow);
 app.route("/user/social/reaction").patch(requireUser, updateScheduleReaction);
+app.route("/social/comments").post(requireUser, listComments);
+app.route("/user/social/comment").patch(requireUser, addComment).delete(requireUser, deleteComment);
 
 // the next parameter is needed!
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

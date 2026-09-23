@@ -99,6 +99,9 @@ export const publishSocialSchedule: RequestHandler<
       await db.socialSchedules.deleteMany({
         where: { clerkUserId: res.locals.userId },
       });
+      // Comments belong to the published schedule, so they go with it. Republishing keeps them.
+      const profile = await db.profiles.findUnique({ where: { clerkUserId: res.locals.userId } });
+      if (profile) await db.scheduleComments.deleteMany({ where: { targetProfileId: profile.id } });
     } else {
       await db.socialSchedules.upsert({
         where: { clerkUserId: res.locals.userId },

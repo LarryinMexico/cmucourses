@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { fakeDb, resetFakeDb } from "../test/fakeDb";
 import { call } from "../test/http";
-import { getSocialDirectory, updateScheduleReaction } from "./social";
+import { getSocialDirectory, publishSocialSchedule, updateScheduleReaction } from "./social";
 
 const TARGET_ID = "64b7f0c2a1d3e4f5a6b7c8d9";
 const ME_PROFILE_ID = "74b7f0c2a1d3e4f5a6b7c8d0";
@@ -151,5 +151,30 @@ describe("getSocialDirectory", () => {
     expect(people).toHaveLength(1);
     expect([people[0]!.following, people[0]!.followsMe]).toEqual([true, true]);
     expect(JSON.stringify(body)).not.toContain("user_them");
+  });
+});
+
+describe("publishSocialSchedule", () => {
+  const publish = (schedule: unknown) => call(publishSocialSchedule as never, "user_me", { schedule });
+
+  test("unpublishing also removes the comments left on that schedule", async () => {
+    fakeDb.profiles!.findUnique!.mockResolvedValue({ id: ME_PROFILE_ID, clerkUserId: "user_me" } as never);
+    const { status } = await publish(null);
+    expect(status).toBe(200);
+    expect(fakeDb.socialSchedules!.deleteMany!.mock.calls).toHaveLength(1);
+    expect(fakeDb.scheduleComments!.deleteMany!.mock.calls[0]).toEqual([{ where: { targetProfileId: ME_PROFILE_ID } }]);
+  });
+
+  test("unpublishing without a profile has no comments to remove", async () => {
+    fakeDb.profiles!.findUnique!.mockResolvedValue(null as never);
+    expect((await publish(null)).status).toBe(200);
+    expect(fakeDb.scheduleComments!.deleteMany!.mock.calls).toHaveLength(0);
+  });
+
+  test("republishing an updated schedule keeps its comments", async () => {
+    const schedule = { name: "Fall", semester: "fall", year: "2026", courses: [] };
+    expect((await publish(schedule)).status).toBe(200);
+    expect(fakeDb.socialSchedules!.upsert!.mock.calls).toHaveLength(1);
+    expect(fakeDb.scheduleComments!.deleteMany!.mock.calls).toHaveLength(0);
   });
 });

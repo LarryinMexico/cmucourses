@@ -295,3 +295,14 @@ model scheduleReactions {
   @@unique([reactorUserId, targetProfileId])
   @@index([targetProfileId])
 }
+
+model scheduleComments {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  authorUserId    String
+  /// The profile whose published schedule is commented on.
+  targetProfileId String   @db.ObjectId
+  body            String
+  createdAt       DateTime @default(now())
+
+  @@index([targetProfileId, createdAt])
+}

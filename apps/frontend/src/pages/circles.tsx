@@ -2,23 +2,31 @@ import type { NextPage } from "next";
 import React, { useMemo, useState } from "react";
 import { SignInButton, useAuth } from "@clerk/nextjs";
 import {
+  COMMENT_LIMITS,
   SOCIAL_REACTIONS,
   type PublishedSchedule,
   type SocialDirectoryProfile,
 } from "@cmucourses/profile";
+import { ChatBubbleLeftIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { Page } from "~/components/Page";
 import { Card } from "~/components/Card";
 import Link from "~/components/Link";
 import { useFetchProfile } from "~/app/api/profile";
 import {
+  useAddComment,
+  useDeleteComment,
   usePublishSocialSchedule,
   useReactToSchedule,
+  useScheduleComments,
   useSocialDirectory,
   useToggleFollow,
 } from "~/app/api/social";
 import { useAppSelector } from "~/app/hooks";
 import { selectActiveUserSchedule } from "~/app/userSchedules";
-import { PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
+import {
+  INPUT_CLASS,
+  PRIMARY_BUTTON_CLASS,
+} from "~/components/profile/fields";
 import { Pill } from "~/components/CourseTags";
 
 const toPublishedSchedule = (
@@ -36,6 +44,104 @@ const toPublishedSchedule = (
       section: schedule.courseSessions[courseID]?.Section || null,
     })),
   };
+};
+
+/** Comments under a published schedule; loaded only once opened. Writing needs following the owner. */
+const Comments = ({ person }: { person: SocialDirectoryProfile }) => {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const { data: comments = [], isPending } = useScheduleComments(
+    person.profileID,
+    open
+  );
+  const add = useAddComment();
+  const remove = useDeleteComment();
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        className="flex items-center gap-1 text-gray-500 text-xs"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <ChatBubbleLeftIcon className="h-4 w-4" />
+        {open && !isPending ? `Comments (${comments.length})` : "Comments"}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {isPending ? (
+            <div className="text-gray-400 text-xs">Loading comments…</div>
+          ) : comments.length === 0 ? (
+            <div className="text-gray-400 text-xs">No comments yet.</div>
+          ) : (
+            <ul className="space-y-2">
+              {comments.map((comment) => (
+                <li key={comment.commentID} className="flex gap-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-gray-400 text-xs">
+                      {comment.authorName} ·{" "}
+                      {new Date(comment.createdAt).toLocaleDateString()}
+                    </div>
+                    <div className="break-words whitespace-pre-wrap text-gray-700">
+                      {comment.body}
+                    </div>
+                  </div>
+                  {comment.canDelete && (
+                    <button
+                      type="button"
+                      aria-label="Delete comment"
+                      title="Delete comment"
+                      className="h-fit shrink-0 rounded p-1 text-gray-400 hover:bg-gray-50"
+                      disabled={remove.isPending}
+                      onClick={() =>
+                        remove.mutate({
+                          profileID: person.profileID,
+                          commentID: comment.commentID,
+                        })
+                      }
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {person.following ? (
+            <div className="space-y-2">
+              <textarea
+                className={`${INPUT_CLASS} w-full`}
+                rows={2}
+                maxLength={COMMENT_LIMITS.body}
+                placeholder="Add a comment"
+                aria-label={`Comment on ${person.displayName}'s schedule`}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <button
+                type="button"
+                className={PRIMARY_BUTTON_CLASS}
+                disabled={draft.trim() === "" || add.isPending}
+                onClick={() =>
+                  add.mutate(
+                    { profileID: person.profileID, body: draft },
+                    { onSuccess: () => setDraft("") }
+                  )
+                }
+              >
+                Post
+              </button>
+            </div>
+          ) : (
+            <div className="text-gray-400 text-xs">
+              Connect with {person.displayName} to comment.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const ProfileCard = ({
@@ -162,6 +268,7 @@ const ProfileCard = ({
               Connect with {person.displayName} to react to this schedule.
             </div>
           )}
+          <Comments person={person} />
         </div>
       )}
     </Card>

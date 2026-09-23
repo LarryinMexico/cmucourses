@@ -26,6 +26,19 @@ export const publishedScheduleSchema = z
 /** A profile is addressed by its database id everywhere in the social API; Clerk ids never leave the server. */
 export const profileIDSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid profile ID");
 
+export const COMMENT_LIMITS = { body: 500 } as const;
+
+export const commentInputSchema = z
+  .object({
+    profileID: profileIDSchema,
+    body: z.string().trim().min(1, "Write a comment first").max(COMMENT_LIMITS.body, "Comment is too long"),
+  })
+  .strict();
+
+export const commentDeleteSchema = z
+  .object({ commentID: z.string().regex(/^[a-f\d]{24}$/i, "Invalid comment ID") })
+  .strict();
+
 export const publishScheduleInputSchema = z.object({ schedule: publishedScheduleSchema.nullable() }).strict();
 
 export const followInputSchema = z
@@ -73,4 +86,16 @@ export interface SocialMe {
 export interface SocialDirectory {
   me: SocialMe;
   people: SocialDirectoryProfile[];
+}
+
+/** A comment on someone's published schedule, as the caller sees it. */
+export interface ScheduleComment {
+  commentID: string;
+  /** Null when the author no longer has a profile. */
+  authorProfileID: string | null;
+  authorName: string;
+  body: string;
+  createdAt: string;
+  /** The caller wrote it, or owns the schedule it is on. */
+  canDelete: boolean;
 }
