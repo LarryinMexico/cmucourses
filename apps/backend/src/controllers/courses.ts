@@ -37,8 +37,10 @@ const catalogTimeToMinutes = (timeExpr: string): Prisma.InputJsonValue =>
     $let: {
       vars: {
         t: timeExpr,
-        hour: { $toInt: { $substrBytes: [timeExpr, 0, 2] } },
-        minute: { $toInt: { $substrBytes: [timeExpr, 3, 2] } },
+        // `vars` are evaluated even when the regex guard below rejects the value, and "TBA"
+        // is a real catalog value, so a plain $toInt would abort the whole aggregation.
+        hour: { $convert: { input: { $substrBytes: [timeExpr, 0, 2] }, to: "int", onError: null } },
+        minute: { $convert: { input: { $substrBytes: [timeExpr, 3, 2] }, to: "int", onError: null } },
         meridiem: { $toUpper: { $substrBytes: [timeExpr, 5, 2] } },
       },
       in: {
@@ -158,7 +160,11 @@ export interface GetFilteredCourses {
     classTimes?: SingleOrArray<string>;
     /** Weekday numbers 0=Sun..6=Sat; any selected day on a meeting matches. */
     meetingDays?: SingleOrArray<string>;
-    /** Exact window in minutes after midnight; the whole meeting must fit inside. */
+    /**
+     * Exact window in minutes after midnight. A meeting fits only if every entry with a stated
+     * time is inside it; a course matches when its lectures and its sections (each kind that
+     * states times) have at least one fitting meeting.
+     */
     timeBegin?: string;
     timeEnd?: string;
     fces?: BoolLiteral;
@@ -367,7 +373,54 @@ export const getFilteredCourses: RequestHandler<
       },
     });
 
-    const scheduleConds: unknown[] = [anyTime(timeFits)];
+    // A meeting (lecture or section) can be attended inside the window when every entry
+    // that states a time fits; TBA entries carry no information, so they are neutral.
+    const timedEntries = (meetingVar: string) => ({
+      $filter: {
+        input: { $ifNull: [`$$${meetingVar}.times`, []] },
+        as: "t",
+        cond: { $ne: [catalogTimeToMinutes("$$t.begin"), null] },
+      },
+    });
+
+    const meetingFits = {
+      $let: {
+        vars: { timed: timedEntries("m") },
+        in: {
+          $and: [
+            { $gt: [{ $size: "$$timed" }, 0] },
+            { $allElementsTrue: { $map: { input: "$$timed", as: "t", in: timeFits("t") } } },
+          ],
+        },
+      },
+    };
+
+    const listHasTime = (listExpr: unknown) => ({
+      $anyElementTrue: {
+        $map: {
+          input: listExpr,
+          as: "m",
+          in: { $gt: [{ $size: timedEntries("m") }, 0] },
+        },
+      },
+    });
+
+    const listHasFit = (listExpr: unknown) => ({
+      $anyElementTrue: { $map: { input: listExpr, as: "m", in: meetingFits } },
+    });
+
+    // Judge lectures and sections the way the student attends them: if either kind states
+    // times, at least one meeting of that kind must fit entirely. A kind with no stated
+    // times (all TBA, or empty) does not block the course.
+    const lectures = { $ifNull: ["$$sched.lectures", []] };
+    const sections = { $ifNull: ["$$sched.sections", []] };
+    const kindOk = (list: unknown) => ({ $or: [{ $not: [listHasTime(list)] }, listHasFit(list)] });
+
+    const windowFits = {
+      $and: [{ $or: [listHasTime(lectures), listHasTime(sections)] }, kindOk(lectures), kindOk(sections)],
+    };
+
+    const scheduleConds: unknown[] = [windowFits];
 
     if (sessions.length > 0) {
       scheduleConds.push({

@@ -14,7 +14,7 @@ Done:
 - Department dropdown
 - Course Level dropdown (undergrad/grad)
 - Unit slider (0-24)
-- Offered in (mini/semester) dropdown
+- Offered in (**semester** only) dropdown — there is no mini option; see "Why there is no mini filter" below
 
 Also done (these three were sitting in the Mural board's Done column with no implementation; Sprint Review deducts 1 point for anything in Done that turns out not to be done):
 - [x] Restrict results to morning/afternoon/evening sections — the **Class Times** filter (`ClassTimesFilter.tsx`), matched server-side in the search aggregation
@@ -34,6 +34,15 @@ The course catalog has no modality field, and the nearest proxies are dead for c
 `CMU REMOTE` is a COVID-era artifact that stops after 2021; `DNM` stops after Spring 2025; for Spring/Fall 2026 every time entry has an empty building. `location` holds a city (`Pittsburgh, Pennsylvania`, `Doha, Qatar`, `Los Angeles, California`), not a delivery mode. Any modality filter inferred from these fields would return zero results for exactly the terms students browse.
 
 What the data *does* support is whether a course has a stated meeting time at all: `begin` is the literal string `"TBA"` in ~54% of Fall 2026 time entries. That is shipped as the fourth Class Times option, so students can still isolate courses with no fixed meeting time. `profile.modality` remains stored and unused until the upstream ScottyLabs data carries a modality field.
+
+#### Why there is no mini filter
+
+Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedule documents): fall and spring documents carry **no `session` value at all**, so CMU's Mini 1-4 cannot be told apart from a full semester. Only summer has sub-terms (`summer one` 545, `summer two` 802, `summer all` 1581, `qatar summer` 120, unset 310). The frontend has a `Session.session` type for these, but no filter ever sets it, and the backend keeps only `year`/`semester` from a `session` query parameter. So "Offered in" is a semester filter; a summer sub-session filter would be possible, a mini filter is not until the upstream data carries one.
+
+#### Known gaps in V1 filters (found by the 2026-09-23 audit)
+
+- **Time-window filter was broken and is fixed.** `timeBegin`/`timeEnd` returned HTTP 500 against any catalog containing `TBA` times (about half of Fall 2026): `catalogTimeToMinutes` ran `$toInt` on `"TB"` even when its regex guard rejected the value. It now converts with `onError: null`. The window also matched a course if *any single* meeting entry fit; it now requires a fitting lecture and a fitting section (each kind that states times), with TBA entries neutral. Checked against a local copy of the catalog by comparing the API to an independent JS implementation of that rule for three windows on Fall 2026 (592/592, 1051/1051 and 2415/2415 courses agree; the old rule admitted 135, 185 and 31 extra courses).
+- **"Only courses that fit my availability" is client-side.** It filters the current results page in the browser (`courseFilterPredicates.ts`), so a page can come back short and `totalDocs` counts courses that were hidden. Making it server-side needs the busy blocks sent with the search request.
 
 ### Student Profiles & Preferences — Done
 
@@ -72,8 +81,8 @@ What the data *does* support is whether a course has a stated meeting time at al
 **Academic Path**
 - [x] Balance degree requirements against career goals — **MISM only.** New `/requirements` page tracks the 13 core requirements from the MISM program handbook (`packages/profile/requirements/mism.ts`) against courses taken/in-progress, plus elective-unit progress and elective suggestions filtered by career goals (`recommendCourses`, excluding anything that already satisfies a core requirement). No other major's requirements have been transcribed yet — `requirementsForMajor` returns `null` for everything else, and the page says so rather than showing an empty shell.
   - `95-867` ("Tech Strategy & Governance"), listed in the MISM handbook, does not exist anywhere in the live course catalog (checked against the full ~8,400-course catalog, 2026-09-19). It stays in the requirement data and renders normally, marked "not in the course catalog" with no course link — see `requirements/mism.ts` for detail. `scripts/check-course-ids.ts` checks for this on every run and expects exactly this one miss.
-- [ ] Plan courses across semesters — moved to V3 (Personalized Schedule Builder): it's the same multi-semester planning surface that builder needs, so it belongs with that work rather than duplicated here
-- [ ] Explore alternative academic paths — moved to V3, same reason
+- [ ] Plan courses across semesters — moved to V3 (Personalized Schedule Builder), where its status is tracked; a first version already exists (see there)
+- [x] Explore alternative academic paths — moved to V3, where its status is tracked
 
 ## V3
 
@@ -81,7 +90,7 @@ What the data *does* support is whether a course has a stated meeting time at al
 
 > Updated 2026-09-18 to match the latest Mural Features Decomposition board: "Apply career & skill goals" was added under Generate, and "Generate alternative options" was removed from Finalize (the team's Product Backlog board still lists the old version under V3 — the two boards are out of sync with each other, not something this file needs to track). Updated 2026-09-19: "Plan courses across semesters" and "Explore alternative academic paths" moved here from V2's Academic Path — both are the same multi-semester planning surface this builder needs, so building them separately would have meant doing the work twice.
 >
-> Generator logic lives in `packages/profile/scheduleGenerator.ts`, unit-tested and wired into `/schedules` as a new Generate panel. It reuses `availabilityFit`/`meetingGroupsFor` (`packages/profile/availability.ts`, V1) for conflict checking and the same core/supporting/want weighting as `recommendCourses` (V2) for career/skill scoring — no overlap math or scoring rules were re-derived. **Scope decision:** candidates are built only from courses the student adds manually (reusing the existing `ScheduleSearch` picker), not auto-selected from filters; and generated schedules stay client-side in the existing `userSchedules` slice (localStorage) rather than a new backend model, since the manual builder already only saves locally.
+> Generator logic lives in `packages/profile/scheduleGenerator.ts`, unit-tested and wired into `/schedules` as a new Generate panel. It reuses `availabilityFit` (`packages/profile/availability.ts`, V1) to judge each pick against `busyBlocks` (the lecture × section options and course-to-course overlap check are its own `optionsFor`/`timePairOverlaps`; `meetingGroupsFor` is used by the search-side badge and filters, not here) and the same core/supporting/want weighting as `recommendCourses` (V2) for career/skill scoring — no overlap math or scoring rules were re-derived. **Scope decision:** candidates are built only from courses the student adds manually (reusing the existing `ScheduleSearch` picker), not auto-selected from filters; and generated schedules stay client-side in the existing `userSchedules` slice (localStorage) rather than a new backend model, since the manual builder already only saves locally.
 
 **Generate**
 - [x] Generate 1-3 personalized schedules — `generateSchedules`, beam-pruned so it stays fast without a full cartesian product over sections
@@ -97,9 +106,9 @@ What the data *does* support is whether a course has a stated meeting time at al
 **Finalize**
 - [x] Select a preferred schedule — "Use this schedule" fills the existing manual builder's lecture/section selections
 - [x] Save chosen schedule — reuses the existing local `userSchedules` save (see scope decision above)
-- [x] Export/share schedule — reuses the existing `?courses=...` shareable link; no `.ics` export yet
-- [ ] Plan courses across semesters (moved from V2's Academic Path) — not built
-- [ ] Explore alternative academic paths (moved from V2's Academic Path) — not built
+- [x] Export/share schedule — the Copy link button builds `/schedules/shared?data=...` (the schedule encoded in the URL; `?courses=...` is only accepted as a fallback), and an **Export .ics** button downloads a calendar file (`buildScheduleICS` in `apps/frontend/src/app/scheduleSharing.ts`, tested)
+- [ ] Plan courses across semesters (moved from V2's Academic Path) — **first version only.** `profile.plannedCourses` (course + semester + year, up to 100) is edited in Profile's "Future course plan" (`PlanSection.tsx`) and feeds PLANNED status on `/requirements`. Still missing: grouping by semester, per-semester unit totals or workload checks, and a schedule check per semester. Known bug: the picker hides courses already in the plan, so one course cannot be placed in two semesters
+- [x] Explore alternative academic paths (moved from V2's Academic Path) — `/careers` "Alternative academic paths" (`AlternativeAcademicPaths`): up to 3 course bundles that each take a different suggested course for every skill gap. Skill-gap based; it does not consider degree requirements
 
 ### Course & Professor Insights — Partially done
 
@@ -138,3 +147,9 @@ What the data *does* support is whether a course has a stated meeting time at al
 - [x] Interactive features: schedule reactions — emoji reactions (👍🎉🔥📚) on a followed
   schedule (`updateScheduleReaction`, `PATCH /user/social/reaction`)
 - [ ] Anything beyond follow/react/publish (comments, messaging, notifications) — not built
+
+## Known issues (2026-09-23 audit, not yet fixed)
+
+- Circles: the page's `published` state starts as `null` on every load (`circles.tsx`), so it does not know you already published; the directory endpoint (`controllers/social.ts`) does not check that a profile has any public section, contradicting the page's empty-state text.
+- The backend has no tests (rating gating and the social controllers are unverified by anything but manual use).
+- Schedule generator UI: the candidate card's workload/availability bars use their own lookup tables instead of the generator's scores, so they can disagree with the total (e.g. unknown workload is 100 in the generator, 75 on the card).
