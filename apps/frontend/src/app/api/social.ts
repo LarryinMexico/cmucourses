@@ -3,7 +3,7 @@ import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type PublishedSchedule,
-  type SocialDirectoryProfile,
+  type SocialDirectory,
   type SocialReaction,
 } from "@cmucourses/profile";
 import { showToast } from "~/components/Toast";
@@ -16,14 +16,19 @@ const backendUrl = () =>
 
 const DIRECTORY_KEY = "socialDirectory";
 
+const EMPTY_DIRECTORY: SocialDirectory = {
+  me: { profileID: null, publishedSchedule: null },
+  people: [],
+};
+
 export const useSocialDirectory = () => {
   const { isSignedIn, getToken } = useAuth();
   return useQuery({
     queryKey: [DIRECTORY_KEY],
-    queryFn: async (): Promise<SocialDirectoryProfile[]> => {
+    queryFn: async (): Promise<SocialDirectory> => {
       const token = await getToken();
-      if (!token) return [];
-      const response = await axios.post<SocialDirectoryProfile[]>(
+      if (!token) return EMPTY_DIRECTORY;
+      const response = await axios.post<SocialDirectory>(
         `${backendUrl()}/social/directory`,
         { token }
       );

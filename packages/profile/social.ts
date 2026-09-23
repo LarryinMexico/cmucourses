@@ -23,18 +23,21 @@ export const publishedScheduleSchema = z
   })
   .strict();
 
+/** A profile is addressed by its database id everywhere in the social API; Clerk ids never leave the server. */
+export const profileIDSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid profile ID");
+
 export const publishScheduleInputSchema = z.object({ schedule: publishedScheduleSchema.nullable() }).strict();
 
 export const followInputSchema = z
   .object({
-    profileID: z.string().regex(/^[a-f\d]{24}$/i, "Invalid profile ID"),
+    profileID: profileIDSchema,
     follow: z.boolean(),
   })
   .strict();
 
 export const reactionInputSchema = z
   .object({
-    profileID: z.string().regex(/^[a-f\d]{24}$/i, "Invalid profile ID"),
+    profileID: profileIDSchema,
     reaction: z.enum(SOCIAL_REACTIONS).nullable(),
   })
   .strict();
@@ -52,7 +55,22 @@ export interface SocialDirectoryProfile {
   skills: string[];
   currentCourseIDs: string[];
   plannedSchedule: PublishedSchedule | null;
+  /** You follow them. Reacting, commenting and messaging all start from this. */
   following: boolean;
+  /** They follow you. With `following` this makes a mutual follow, which is what messaging needs. */
+  followsMe: boolean;
   myReaction: SocialReaction | null;
   reactions: Partial<Record<SocialReaction, number>>;
+}
+
+/** The caller's own social state, so the page can show what is already published after a reload. */
+export interface SocialMe {
+  /** Null until the caller has saved a profile. */
+  profileID: string | null;
+  publishedSchedule: PublishedSchedule | null;
+}
+
+export interface SocialDirectory {
+  me: SocialMe;
+  people: SocialDirectoryProfile[];
 }

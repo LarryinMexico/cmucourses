@@ -134,27 +134,34 @@ const ProfileCard = ({
               </Link>
             ))}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {SOCIAL_REACTIONS.map((reaction) => (
-              <button
-                type="button"
-                key={reaction}
-                className={`rounded border px-2 py-1 text-xs ${
-                  person.myReaction === reaction
-                    ? "border-blue-300 bg-blue-50"
-                    : "border-gray-200"
-                }`}
-                onClick={() =>
-                  react.mutate({
-                    profileID: person.profileID,
-                    reaction: person.myReaction === reaction ? null : reaction,
-                  })
-                }
-              >
-                {reaction} {person.reactions[reaction] ?? 0}
-              </button>
-            ))}
-          </div>
+          {person.following ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {SOCIAL_REACTIONS.map((reaction) => (
+                <button
+                  type="button"
+                  key={reaction}
+                  className={`rounded border px-2 py-1 text-xs ${
+                    person.myReaction === reaction
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-gray-200"
+                  }`}
+                  onClick={() =>
+                    react.mutate({
+                      profileID: person.profileID,
+                      reaction:
+                        person.myReaction === reaction ? null : reaction,
+                    })
+                  }
+                >
+                  {reaction} {person.reactions[reaction] ?? 0}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 text-gray-400 text-xs">
+              Connect with {person.displayName} to react to this schedule.
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -164,10 +171,12 @@ const ProfileCard = ({
 const CirclesContent = () => {
   const { isSignedIn } = useAuth();
   const { data: profile } = useFetchProfile();
-  const { data: people = [], isPending } = useSocialDirectory();
+  const { data: directory, isPending } = useSocialDirectory();
+  const people = useMemo(() => directory?.people ?? [], [directory]);
+  // Comes from the server, so it survives a reload; the directory refetches after publishing.
+  const published = directory?.me.publishedSchedule ?? null;
   const activeSchedule = useAppSelector(selectActiveUserSchedule);
   const publish = usePublishSocialSchedule();
-  const [published, setPublished] = useState<PublishedSchedule | null>(null);
   const [studyPartnersOnly, setStudyPartnersOnly] = useState(false);
   const [similarInterestsOnly, setSimilarInterestsOnly] = useState(false);
 
@@ -253,10 +262,7 @@ const CirclesContent = () => {
             disabled={!selectedForPublish || publish.isPending}
             onClick={() => {
               if (!selectedForPublish) return;
-              publish.mutate(
-                { schedule: selectedForPublish },
-                { onSuccess: () => setPublished(selectedForPublish) }
-              );
+              publish.mutate({ schedule: selectedForPublish });
             }}
           >
             Publish active planned schedule
@@ -265,18 +271,20 @@ const CirclesContent = () => {
             <button
               type="button"
               className="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-600"
-              onClick={() =>
-                publish.mutate(
-                  { schedule: null },
-                  { onSuccess: () => setPublished(null) }
-                )
-              }
+              disabled={publish.isPending}
+              onClick={() => publish.mutate({ schedule: null })}
             >
               Unpublish
             </button>
           )}
           <Link href="/profile#courses">Manage actual schedule sharing</Link>
         </div>
+        {published && (
+          <p className="mt-2 capitalize text-gray-500 text-xs">
+            Published: {published.name} · {published.semester}{" "}
+            {published.year}
+          </p>
+        )}
       </Card>
 
       {friendCourses.length > 0 && (
@@ -323,7 +331,7 @@ const CirclesContent = () => {
         <div className="text-gray-400 text-sm">
           {people.length > 0 && (studyPartnersOnly || similarInterestsOnly)
             ? "No one matches these filters. Try clearing Study partners or Similar interests."
-            : "No matching public profiles yet. Profiles appear here after another student makes at least one profile section public."}
+            : "No matching profiles yet. Profiles appear here after another student makes a profile section public or publishes a schedule."}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

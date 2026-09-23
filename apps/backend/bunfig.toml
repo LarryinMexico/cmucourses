@@ -1,0 +1,4 @@
+[test]
+# One fake database for every test file. `bun test` runs all files in a single process, so a
+# per-file mock.module would leave already-imported controllers bound to a stale fake.
+preload = ["./src/test/setup.ts"]

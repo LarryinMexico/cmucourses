@@ -4,97 +4,77 @@ import {
   followInputSchema,
   publishScheduleInputSchema,
   reactionInputSchema,
-  SOCIAL_REACTIONS,
-  COLLEGES,
-  MAJORS,
-  labelOf,
-  type SocialDirectoryProfile,
-  type SocialReaction,
+  type SocialDirectory,
 } from "@cmucourses/profile";
 import { UserLocals } from "./user";
+import { checkInteractionTarget } from "./socialAccess";
+import { toDirectoryProfile, toPublishedSchedule } from "./socialDirectory";
 
 type ErrorBody = { error: string };
 
+// A profile shows up in the directory when it has shared something: a public section, or a
+// published schedule. Filtering happens in the query (not after `take`) so a page of private
+// profiles cannot push public ones out of the first 100.
+const SHAREABLE_SECTIONS = ["academic", "careers", "skills", "courses"] as const;
+
 export const getSocialDirectory: RequestHandler<
   unknown,
-  SocialDirectoryProfile[] | ErrorBody,
+  SocialDirectory | ErrorBody,
   { token: string },
   unknown,
   UserLocals
 > = async (_req, res, next) => {
+  const me = res.locals.userId;
   try {
+    const [myProfile, mySchedule, published] = await Promise.all([
+      db.profiles.findUnique({ where: { clerkUserId: me } }),
+      db.socialSchedules.findUnique({ where: { clerkUserId: me } }),
+      db.socialSchedules.findMany({ select: { clerkUserId: true } }),
+    ]);
+
     const profiles = await db.profiles.findMany({
-      where: { clerkUserId: { not: res.locals.userId } },
+      where: {
+        clerkUserId: { not: me },
+        OR: [
+          ...SHAREABLE_SECTIONS.map((section) => ({ visibility: { is: { [section]: "PUBLIC" as const } } })),
+          { clerkUserId: { in: published.map((row) => row.clerkUserId).filter((id) => id !== me) } },
+        ],
+      },
       take: 100,
     });
     const userIDs = profiles.map((profile) => profile.clerkUserId);
     const profileIDs = profiles.map((profile) => profile.id);
-    const [schedules, follows, reactions] = await Promise.all([
-      db.socialSchedules.findMany({
-        where: { clerkUserId: { in: userIDs } },
-      }),
-      db.follows.findMany({
-        where: { followerUserId: res.locals.userId },
-      }),
-      db.scheduleReactions.findMany({
-        where: { targetProfileId: { in: profileIDs } },
-      }),
+
+    const [schedules, myFollows, followersOfMe, reactions] = await Promise.all([
+      db.socialSchedules.findMany({ where: { clerkUserId: { in: userIDs } } }),
+      db.follows.findMany({ where: { followerUserId: me } }),
+      myProfile ? db.follows.findMany({ where: { followedProfileId: myProfile.id } }) : Promise.resolve([]),
+      db.scheduleReactions.findMany({ where: { targetProfileId: { in: profileIDs } } }),
     ]);
 
     const scheduleByUser = new Map(schedules.map((schedule) => [schedule.clerkUserId, schedule]));
-    const followed = new Set(follows.map((follow) => follow.followedProfileId));
+    const followedProfileIDs = new Set(myFollows.map((follow) => follow.followedProfileId));
+    const followerUserIDs = new Set(followersOfMe.map((follow) => follow.followerUserId));
+    const reactionsByProfile = new Map<string, typeof reactions>();
+    for (const reaction of reactions) {
+      const list = reactionsByProfile.get(reaction.targetProfileId) ?? [];
+      list.push(reaction);
+      reactionsByProfile.set(reaction.targetProfileId, list);
+    }
 
-    res.json(
-      profiles.map((profile) => {
-        const schedule = scheduleByUser.get(profile.clerkUserId);
-        const profileReactions = reactions.filter((reaction) => reaction.targetProfileId === profile.id);
-        const counts: Partial<Record<SocialReaction, number>> = {};
-        for (const reaction of profileReactions) {
-          if (!SOCIAL_REACTIONS.includes(reaction.reaction as SocialReaction)) continue;
-          const value = reaction.reaction as SocialReaction;
-          counts[value] = (counts[value] ?? 0) + 1;
-        }
-        const ownReaction = profileReactions.find((reaction) => reaction.reactorUserId === res.locals.userId)?.reaction;
-
-        return {
-          profileID: profile.id,
-          displayName: profile.displayName || "CMU student",
-          bio: profile.bio,
-          academicSummary:
-            profile.visibility.academic === "PUBLIC" && profile.academic
-              ? [
-                  profile.academic.college
-                    ? labelOf(COLLEGES, profile.academic.college)
-                    : null,
-                  ...profile.academic.majors.map((id) => labelOf(MAJORS, id)),
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || null
-              : null,
-          careers: profile.visibility.careers === "PUBLIC" ? profile.careers : [],
-          skills: profile.visibility.skills === "PUBLIC" ? [...profile.skillsHave, ...profile.skillsWant] : [],
-          currentCourseIDs:
-            profile.visibility.courses === "PUBLIC"
-              ? profile.courses.filter((course) => course.status === "IN_PROGRESS").map((course) => course.courseID)
-              : [],
-          plannedSchedule: schedule
-            ? {
-                name: schedule.name,
-                semester: schedule.semester as "fall" | "spring" | "summer",
-                year: schedule.year,
-                courses: schedule.courses.map((course) => ({
-                  courseID: course.courseID,
-                  lecture: course.lecture ?? null,
-                  section: course.section ?? null,
-                })),
-              }
-            : null,
-          following: followed.has(profile.id),
-          myReaction: SOCIAL_REACTIONS.includes(ownReaction as SocialReaction) ? (ownReaction as SocialReaction) : null,
-          reactions: counts,
-        };
-      })
-    );
+    res.json({
+      me: { profileID: myProfile?.id ?? null, publishedSchedule: toPublishedSchedule(mySchedule) },
+      people: profiles.map((profile) =>
+        toDirectoryProfile({
+          profile,
+          schedule: scheduleByUser.get(profile.clerkUserId),
+          reactions: reactionsByProfile.get(profile.id) ?? [],
+          viewerUserId: me,
+          followedProfileIDs,
+          followerUserIDs,
+        })
+      ),
+    });
   } catch (error) {
     next(error);
   }
@@ -202,6 +182,14 @@ export const updateScheduleReaction: RequestHandler<
     return;
   }
   try {
+    // Taking a reaction back is always allowed; putting one on needs the same standing as commenting.
+    if (parsed.data.reaction !== null) {
+      const check = await checkInteractionTarget(res.locals.userId, parsed.data.profileID, "react");
+      if (!check.ok) {
+        res.status(check.status).json({ error: check.error });
+        return;
+      }
+    }
     if (parsed.data.reaction === null) {
       await db.scheduleReactions.deleteMany({
         where: {

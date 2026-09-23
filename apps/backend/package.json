@@ -5,7 +5,8 @@
     "start": "bun run ./build/app.js",
     "dev": "bun --watch src/app.ts",
     "build": "bun build ./src/app.ts --target=bun --outdir=build",
-    "lint": "eslint ./src/**"
+    "lint": "eslint ./src/**",
+    "test": "bun test"
   },
   "dependencies": {
     "@clerk/clerk-sdk-node": "^5.1.6",
@@ -30,6 +31,7 @@
     "@types/node-cron": "^3.0.11",
     "@typescript-eslint/eslint-plugin": "^8.21.0",
     "@typescript-eslint/parser": "^8.21.0",
+    "bun-types": "^1.4.2",
     "eslint": "^9.19.0",
     "eslint-config-prettier": "^10.0.1",
     "globals": "^15.14.0",
