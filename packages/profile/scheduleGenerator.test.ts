@@ -303,10 +303,16 @@ describe("locks and excludes", () => {
       courseID: "15-122",
       units: 10,
       lectures: [
-        lecture("Lec A", "09:00AM", "09:50AM", [1, 3], [
-          { name: "A1", begin: "11:00AM", end: "11:50AM", days: [5] },
-          { name: "A2", begin: "01:00PM", end: "01:50PM", days: [5] },
-        ]),
+        lecture(
+          "Lec A",
+          "09:00AM",
+          "09:50AM",
+          [1, 3],
+          [
+            { name: "A1", begin: "11:00AM", end: "11:50AM", days: [5] },
+            { name: "A2", begin: "01:00PM", end: "01:50PM", days: [5] },
+          ]
+        ),
       ],
     };
     const result = generateSchedules({
@@ -367,9 +373,9 @@ describe("locks and excludes", () => {
     });
     expect(result).toHaveLength(1);
     expect(result[0]!.picks).toHaveLength(0);
-    expect(result[0]!.reasons.some((r) => r.includes("15-213") && /exclud/i.test(r) && !/No schedule data/.test(r))).toBe(
-      true
-    );
+    expect(
+      result[0]!.reasons.some((r) => r.includes("15-213") && /exclud/i.test(r) && !/No schedule data/.test(r))
+    ).toBe(true);
   });
 });
 
@@ -388,7 +394,10 @@ describe("candidate scores", () => {
     expect(candidate.scores.career).toBe(candidate.careerScore);
     expect(candidate.scores.preference).toBe(candidate.preferenceScore);
     const { availability, workload, career, preference } = candidate.scores;
-    expect(candidate.totalScore).toBeCloseTo(0.35 * availability + 0.25 * workload + 0.2 * career + 0.2 * preference, 6);
+    expect(candidate.totalScore).toBeCloseTo(
+      0.35 * availability + 0.25 * workload + 0.2 * career + 0.2 * preference,
+      6
+    );
   });
 
   test("unknown workload scores 100, not the 75 the candidate card used to show", () => {
@@ -407,12 +416,129 @@ describe("beam pruning", () => {
       return {
         courseID: `10-${200 + index}`,
         units: 9,
-        lectures: Array.from({ length: 5 }, (_, day) => lecture(`Lec ${day}`, `${hour}:00AM`, `${hour}:50AM`, [day + 1])),
+        lectures: Array.from({ length: 5 }, (_, day) =>
+          lecture(`Lec ${day}`, `${hour}:00AM`, `${hour}:50AM`, [day + 1])
+        ),
       };
     });
     const busyBlocks = [1, 2, 3, 4].map((day) => block(day, 7 * 60, 20 * 60));
     const result = generateSchedules({ ...baseInput, courses, busyBlocks });
     expect(result[0]!.availability.status).toBe("FITS");
     expect(result[0]!.picks.every((p) => p.lecture === "Lec 4")).toBe(true);
+  });
+});
+
+describe("candidate pool (optionalCourses)", () => {
+  const at = (hour: number) => `${String(hour).padStart(2, "0")}:00AM`;
+  /** A course of `units` units on Mon/Wed at a distinct hour, so pool courses never clash by accident. */
+  const course = (id: string, units: number, hour: number) =>
+    simpleCourse(id, units, at(hour), at(hour).replace(":00", ":50"));
+  const required = course("15-213", 12, 8);
+  const pool = [
+    course("21-127", 12, 9),
+    course("15-122", 12, 10),
+    course("33-104", 12, 11),
+    course("18-100", 12, 12),
+  ].map((c) =>
+    // 12:00AM would be midnight; keep the last one in the afternoon
+    c.courseID === "18-100" ? simpleCourse("18-100", 12, "01:00PM", "01:50PM") : c
+  );
+  const range = (unitsMin: number | null, unitsMax: number | null) => ({ unitsMin, unitsMax, hoursPerWeek: null });
+  const run = (over: Partial<GeneratorInput> = {}) =>
+    generateSchedules({ ...baseInput, courses: [required], optionalCourses: pool, workload: range(36, 48), ...over });
+  const ids = (candidate: { picks: { courseID: string }[] }) => candidate.picks.map((p) => p.courseID);
+
+  test("chooses which pool courses to add so the total lands in the units range", () => {
+    const result = run();
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]!.totalUnits).toBeGreaterThanOrEqual(36);
+    expect(result[0]!.totalUnits).toBeLessThanOrEqual(48);
+    expect(result[0]!.workloadFit).toBe("IN_RANGE");
+  });
+
+  test("never goes over the maximum, whatever the pool holds", () => {
+    // Ask for plenty of candidates: the top few would stay in range even without a hard limit.
+    const result = run({ workload: range(null, 30), maxCandidates: 20 });
+    expect(result.length).toBeGreaterThan(0);
+    for (const candidate of result) expect(candidate.totalUnits).toBeLessThanOrEqual(30);
+  });
+
+  test("required courses are in every candidate", () => {
+    for (const candidate of run()) expect(ids(candidate)).toContain("15-213");
+  });
+
+  test("a pool course left out is not reported as unscheduled, and the pool is summarised once", () => {
+    const [first] = run({ workload: range(24, 24) }); // room for exactly one more 12-unit course
+    expect(first!.picks).toHaveLength(2);
+    expect(first!.reasons.some((r) => /No schedule data|excluded from this candidate/.test(r))).toBe(false);
+    expect(first!.reasons.filter((r) => r.startsWith("Not added from your pool"))).toHaveLength(1);
+  });
+
+  test("says which pool courses were added", () => {
+    const [first] = run({ workload: range(24, 24) });
+    const added = ids(first!).find((id) => id !== "15-213")!;
+    expect(first!.reasons).toContain(`Added ${added} from your pool`);
+  });
+
+  test("a locked pool course is always in the schedule", () => {
+    const result = run({ locks: [{ courseID: "33-104", lecture: "Lec 1", section: null }] });
+    expect(result.length).toBeGreaterThan(0);
+    for (const candidate of result) expect(ids(candidate)).toContain("33-104");
+  });
+
+  test("an excluded pool option never appears", () => {
+    const result = run({ excluded: [{ courseID: "21-127", lecture: "Lec 1", section: null }] });
+    for (const candidate of result) expect(ids(candidate)).not.toContain("21-127");
+  });
+
+  test("a pool course that clashes with a required one is simply left out, not a reason to fail", () => {
+    const clash = simpleCourse("99-100", 9, "08:00AM", "08:50AM"); // same slot as 15-213
+    const result = run({ optionalCourses: [clash, ...pool], maxCandidates: 20 });
+    expect(result.length).toBeGreaterThan(0);
+    for (const candidate of result) expect(ids(candidate)).not.toContain("99-100");
+  });
+
+  test("without a units range there is nothing to choose by: every pool course that fits is added, and it says why", () => {
+    const [first] = run({ workload: null });
+    expect(ids(first!).sort()).toEqual(["15-122", "15-213", "18-100", "21-127", "33-104"]);
+    expect(first!.reasons).toContain("Set a units range to let the generator choose from your pool");
+  });
+
+  test("works from a pool alone, with no required courses", () => {
+    const result = run({ courses: [], workload: range(24, 24) });
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]!.totalUnits).toBe(24);
+    expect(result.every((candidate) => candidate.picks.length > 0)).toBe(true);
+  });
+
+  test("no candidate is an empty schedule", () => {
+    for (const candidate of run({ workload: range(0, 100) })) expect(candidate.picks.length).toBeGreaterThan(0);
+  });
+
+  test("a large pool stays fast", () => {
+    const manyRequired = Array.from({ length: 4 }, (_, i) => course(`10-${100 + i}`, 9, 8 + i));
+    // Twelve pool courses, each with five lecture days at its own afternoon hour, so they can all
+    // coexist and the search really has to choose.
+    const manyPool: CandidateCourse[] = Array.from({ length: 12 }, (_, i) => {
+      const hour = String(1 + (i % 11)).padStart(2, "0");
+      return {
+        courseID: `20-${100 + i}`,
+        units: 9,
+        lectures: Array.from({ length: 5 }, (_, day) =>
+          lecture(`Lec ${day}`, `${hour}:00PM`, `${hour}:50PM`, [day + 1])
+        ),
+      };
+    });
+    const start = performance.now();
+    const result = generateSchedules({
+      ...baseInput,
+      courses: manyRequired,
+      optionalCourses: manyPool,
+      workload: range(36, 45),
+    });
+    const elapsed = performance.now() - start;
+    console.log(`pool of 12 + 4 required: ${elapsed.toFixed(0)} ms`);
+    expect(result.length).toBeGreaterThan(0);
+    expect(elapsed).toBeLessThan(1000);
   });
 });

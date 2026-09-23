@@ -36,7 +36,14 @@ export interface SectionRef {
 }
 
 export interface GeneratorInput {
+  /** Courses that must all be scheduled. */
   courses: CandidateCourse[];
+  /**
+   * A pool to draw from: each may be added or left out, so the generator chooses a subset that
+   * suits the units range. A pool course with a lock counts as required. Without a units range
+   * there is nothing to choose by, so every pool course that fits is added.
+   */
+  optionalCourses?: CandidateCourse[];
   busyBlocks: BusyBlock[];
   workload: Workload | null;
   /** profile.careers — ordered by priority; the first is weighted highest. */
@@ -96,6 +103,9 @@ const WANT_WEIGHT = 2;
 // single-course schedule lands near the middle of the range, not saturating instantly.
 const CAREER_SCALE = 5;
 
+/** How many left-out pool courses the summary reason names before saying "and N more". */
+const MAX_LEFT_OUT_LISTED = 6;
+
 // A course's units range is scored 0 outside [min, max]; WORKLOAD_WIDTH_FLOOR keeps a very
 // narrow or single-value range from making the score fall off a cliff, and
 // WORKLOAD_DEFAULT_RANGE approximates a missing bound (e.g. only unitsMin set) as "give or take
@@ -109,17 +119,16 @@ interface Option {
   times: MeetingTime[];
   /** Clashes with the student's busy blocks; scored once here rather than per partial schedule. */
   busy: boolean;
+  /** This option's share of the availability score (FIT_SCORE of its fit against the busy blocks). */
+  fitScore: number;
 }
 
 const optionsFor = (course: CandidateCourse, busyBlocks: BusyBlock[]): Option[] => {
   const options: Option[] = [];
-  const add = (lecture: string, section: string | null, times: MeetingTime[]) =>
-    options.push({
-      lecture,
-      section,
-      times,
-      busy: availabilityFit([times], busyBlocks).status === "CONFLICTS",
-    });
+  const add = (lecture: string, section: string | null, times: MeetingTime[]) => {
+    const { status } = availabilityFit([times], busyBlocks);
+    options.push({ lecture, section, times, busy: status === "CONFLICTS", fitScore: FIT_SCORE[status] });
+  };
   for (const lecture of course.lectures) {
     if (lecture.sections.length === 0) {
       add(lecture.name, null, lecture.times);
@@ -149,7 +158,9 @@ const resolveOptions = (
   excluded: readonly SectionRef[]
 ): ResolvedOptions => {
   const all = optionsFor(course, busyBlocks);
-  const remaining = all.filter((option) => !excluded.some((ref) => ref.courseID === course.courseID && matchesRef(option, ref)));
+  const remaining = all.filter(
+    (option) => !excluded.some((ref) => ref.courseID === course.courseID && matchesRef(option, ref))
+  );
   const courseLocks = locks.filter((ref) => ref.courseID === course.courseID);
   const locked = remaining.filter((option) => courseLocks.some((ref) => matchesRef(option, ref)));
   const staleLocks = courseLocks.filter((ref) => !remaining.some((option) => matchesRef(option, ref)));
@@ -182,18 +193,76 @@ interface PartialSchedule {
   unscheduled: string[];
   /** Picks that clash with the student's busy blocks. */
   busyClashes: number;
+  /** Running sums, so the beam can rank a partial schedule without rebuilding it. */
+  units: number;
+  fitSum: number;
+  careerRaw: number;
 }
 
-/** Heuristic for beam pruning: fewer unscheduled courses, then fewer busy-block clashes, wins. */
-const partialScore = (partial: PartialSchedule): number => -partial.unscheduled.length - partial.busyClashes;
+interface SearchContext {
+  required: CandidateCourse[];
+  optional: CandidateCourse[];
+  optionsByCourse: ReadonlyMap<string, Option[]>;
+  unitsByCourse: ReadonlyMap<string, number>;
+  careerRawByCourse: ReadonlyMap<string, number>;
+  workload: Workload | null;
+  /** A units range exists to choose pool courses by. Otherwise every pool course that fits is added. */
+  chooseSubset: boolean;
+}
 
-const buildPartials = (courses: CandidateCourse[], optionsByCourse: ReadonlyMap<string, Option[]>): PartialSchedule[] => {
+/**
+ * Beam ranking: the score the partial schedule would have as it stands, with the same weights as a
+ * finished candidate. With only required courses every partial at a step holds the same courses,
+ * so only availability differs and this reduces to preferring fewer busy-block clashes. With a
+ * pool it also has to prefer a partial that is closer to the units range or carries a more useful
+ * course, or the beam would always favour adding nothing (fewest clashes).
+ */
+const partialScore = (partial: PartialSchedule, workload: Workload | null): number => {
+  const availability = partial.picks.length === 0 ? 100 : partial.fitSum / partial.picks.length;
+  return (
+    -1000 * partial.unscheduled.length +
+    AVAILABILITY_WEIGHT * availability +
+    WORKLOAD_WEIGHT * workloadFitFor(partial.units, workload).score +
+    CAREER_WEIGHT * Math.min(100, partial.careerRaw * CAREER_SCALE)
+  );
+};
+
+const knownUnits = (units: number | undefined): number =>
+  units !== undefined && units > 0 && !Number.isNaN(units) ? units : 0;
+
+const extend = (
+  partial: PartialSchedule,
+  course: CandidateCourse,
+  option: Option,
+  ctx: SearchContext
+): PartialSchedule => ({
+  picks: [
+    ...partial.picks,
+    { courseID: course.courseID, lecture: option.lecture, section: option.section, times: option.times },
+  ],
+  usedTimes: [...partial.usedTimes, ...option.times],
+  unscheduled: partial.unscheduled,
+  busyClashes: partial.busyClashes + (option.busy ? 1 : 0),
+  units: partial.units + knownUnits(ctx.unitsByCourse.get(course.courseID)),
+  fitSum: partial.fitSum + option.fitScore,
+  careerRaw: partial.careerRaw + (ctx.careerRawByCourse.get(course.courseID) ?? 0),
+});
+
+const prune = (partials: PartialSchedule[], workload: Workload | null): PartialSchedule[] =>
+  partials.length > BEAM_WIDTH
+    ? [...partials].sort((a, b) => partialScore(b, workload) - partialScore(a, workload)).slice(0, BEAM_WIDTH)
+    : partials;
+
+const buildPartials = (ctx: SearchContext): PartialSchedule[] => {
+  const { optionsByCourse, workload } = ctx;
   // Most-constrained-first: fewer options to try first narrows the beam faster.
-  const sorted = [...courses].sort(
+  const sorted = [...ctx.required].sort(
     (a, b) => (optionsByCourse.get(a.courseID)?.length ?? 0) - (optionsByCourse.get(b.courseID)?.length ?? 0)
   );
 
-  let partials: PartialSchedule[] = [{ picks: [], usedTimes: [], unscheduled: [], busyClashes: 0 }];
+  let partials: PartialSchedule[] = [
+    { picks: [], usedTimes: [], unscheduled: [], busyClashes: 0, units: 0, fitSum: 0, careerRaw: 0 },
+  ];
 
   for (const course of sorted) {
     const options = optionsByCourse.get(course.courseID) ?? [];
@@ -202,19 +271,11 @@ const buildPartials = (courses: CandidateCourse[], optionsByCourse: ReadonlyMap<
       continue;
     }
 
-    let next: PartialSchedule[] = [];
+    const next: PartialSchedule[] = [];
     for (const partial of partials) {
       for (const option of options) {
         if (conflictsWithAny(option.times, partial.usedTimes)) continue;
-        next.push({
-          picks: [
-            ...partial.picks,
-            { courseID: course.courseID, lecture: option.lecture, section: option.section, times: option.times },
-          ],
-          usedTimes: [...partial.usedTimes, ...option.times],
-          unscheduled: partial.unscheduled,
-          busyClashes: partial.busyClashes + (option.busy ? 1 : 0),
-        });
+        next.push(extend(partial, course, option, ctx));
       }
     }
 
@@ -223,10 +284,35 @@ const buildPartials = (courses: CandidateCourse[], optionsByCourse: ReadonlyMap<
     // course set instead.
     if (next.length === 0) return [];
 
-    partials =
-      next.length > BEAM_WIDTH
-        ? [...next].sort((a, b) => partialScore(b) - partialScore(a)).slice(0, BEAM_WIDTH)
-        : next;
+    partials = prune(next, workload);
+  }
+
+  // Pool courses: each is either added (one of its options) or left out. The most useful ones
+  // go first so the beam keeps them. A course that cannot be added to a partial (it clashes, or
+  // would pass the maximum) simply leaves that partial as it is.
+  const max = workload?.unitsMax ?? null;
+  const pool = [...ctx.optional].sort(
+    (a, b) =>
+      (ctx.careerRawByCourse.get(b.courseID) ?? 0) - (ctx.careerRawByCourse.get(a.courseID) ?? 0) ||
+      a.courseID.localeCompare(b.courseID)
+  );
+  for (const course of pool) {
+    const options = optionsByCourse.get(course.courseID) ?? [];
+    if (options.length === 0) continue;
+    const courseUnits = knownUnits(ctx.unitsByCourse.get(course.courseID));
+
+    const next: PartialSchedule[] = [];
+    for (const partial of partials) {
+      let added = false;
+      for (const option of options) {
+        if (conflictsWithAny(option.times, partial.usedTimes)) continue;
+        if (max !== null && partial.units + courseUnits > max) continue;
+        next.push(extend(partial, course, option, ctx));
+        added = true;
+      }
+      if (!added || ctx.chooseSubset) next.push(partial);
+    }
+    partials = prune(next, workload);
   }
 
   return partials;
@@ -378,7 +464,8 @@ const buildCandidate = (
   partial: PartialSchedule,
   { busyBlocks, workload, careers, skillsWant, skillsHave, preferences, preferredModality }: GeneratorInput,
   unitsByCourse: ReadonlyMap<string, number>,
-  allExcluded: ReadonlySet<string>
+  allExcluded: ReadonlySet<string>,
+  pool: { ids: ReadonlySet<string>; chooseSubset: boolean }
 ): ScheduleCandidate => {
   const conflicts: string[] = [];
   let availabilitySum = 0;
@@ -397,6 +484,20 @@ const buildCandidate = (
     const { raw, reasons: skillReasons } = careerScoreFor(pick.courseID, careers, skillsWant, skillsHave);
     careerRaw += raw;
     for (const skill of skillReasons) reasons.push(`Builds ${skill} toward your goals (${pick.courseID})`);
+  }
+
+  if (pool.ids.size > 0) {
+    const picked = new Set(partial.picks.map((pick) => pick.courseID));
+    for (const courseID of [...pool.ids].filter((id) => picked.has(id)).sort()) {
+      reasons.push(`Added ${courseID} from your pool`);
+    }
+    const leftOut = [...pool.ids].filter((id) => !picked.has(id)).sort();
+    if (leftOut.length > 0) {
+      const shown = leftOut.slice(0, MAX_LEFT_OUT_LISTED).join(", ");
+      const more = leftOut.length - MAX_LEFT_OUT_LISTED;
+      reasons.push(`Not added from your pool: ${shown}${more > 0 ? ` and ${more} more` : ""}`);
+    }
+    if (!pool.chooseSubset) reasons.push("Set a units range to let the generator choose from your pool");
   }
 
   for (const courseID of partial.unscheduled) {
@@ -439,31 +540,62 @@ const buildCandidate = (
     workloadFit,
     careerScore,
     preferenceScore,
-    scores: { availability: availabilityScore, workload: workloadScore, career: careerScore, preference: preferenceScore },
+    scores: {
+      availability: availabilityScore,
+      workload: workloadScore,
+      career: careerScore,
+      preference: preferenceScore,
+    },
     totalScore,
     reasons,
   };
 };
 
 export const generateSchedules = (input: GeneratorInput): ScheduleCandidate[] => {
-  if (input.courses.length === 0) return [];
+  const locks = input.locks ?? [];
+  const requiredIDs = new Set(input.courses.map((course) => course.courseID));
+  const poolCourses = (input.optionalCourses ?? []).filter((course) => !requiredIDs.has(course.courseID));
+  if (input.courses.length === 0 && poolCourses.length === 0) return [];
 
-  const unitsByCourse = new Map(input.courses.map((c) => [c.courseID, c.units]));
+  const allCourses = [...input.courses, ...poolCourses];
+  const unitsByCourse = new Map(allCourses.map((c) => [c.courseID, c.units]));
 
   const optionsByCourse = new Map<string, Option[]>();
   const allExcluded = new Set<string>();
+  const lockedPool = new Set<string>();
   const staleLockNotes: string[] = [];
-  for (const course of input.courses) {
-    const resolved = resolveOptions(course, input.busyBlocks, input.locks ?? [], input.excluded ?? []);
+  for (const course of allCourses) {
+    const resolved = resolveOptions(course, input.busyBlocks, locks, input.excluded ?? []);
     optionsByCourse.set(course.courseID, resolved.options);
     if (resolved.allExcluded) allExcluded.add(course.courseID);
     for (const ref of resolved.staleLocks) {
       const which = ref.section === null ? ref.lecture : `${ref.lecture} / ${ref.section}`;
       staleLockNotes.push(`${course.courseID} ${which} is locked but no longer available; the lock was ignored`);
     }
+    // Pinning a pool course says "I want this one", so it stops being optional.
+    const lockCount = locks.filter((ref) => ref.courseID === course.courseID).length;
+    if (!requiredIDs.has(course.courseID) && lockCount > resolved.staleLocks.length) lockedPool.add(course.courseID);
   }
 
-  const partials = buildPartials(input.courses, optionsByCourse);
+  const optional = poolCourses.filter((course) => !lockedPool.has(course.courseID));
+  const required = [...input.courses, ...poolCourses.filter((course) => lockedPool.has(course.courseID))];
+  const chooseSubset = input.workload?.unitsMin != null || input.workload?.unitsMax != null;
+
+  const partials = buildPartials({
+    required,
+    optional,
+    optionsByCourse,
+    unitsByCourse,
+    careerRawByCourse: new Map(
+      allCourses.map((course) => [
+        course.courseID,
+        careerScoreFor(course.courseID, input.careers, input.skillsWant, input.skillsHave).raw,
+      ])
+    ),
+    workload: input.workload,
+    chooseSubset,
+  });
+  const pool = { ids: new Set(optional.map((course) => course.courseID)), chooseSubset };
 
   const seen = new Set<string>();
   const candidates: ScheduleCandidate[] = [];
@@ -471,7 +603,9 @@ export const generateSchedules = (input: GeneratorInput): ScheduleCandidate[] =>
     const sig = pickSignature(partial.picks);
     if (seen.has(sig)) continue;
     seen.add(sig);
-    const candidate = buildCandidate(partial, input, unitsByCourse, allExcluded);
+    // With a pool, leaving everything out is not a schedule.
+    if (poolCourses.length > 0 && partial.picks.length === 0) continue;
+    const candidate = buildCandidate(partial, input, unitsByCourse, allExcluded, pool);
     candidate.reasons.push(...staleLockNotes);
     candidates.push(candidate);
   }

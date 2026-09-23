@@ -11,6 +11,9 @@ import {
 import {
   buildGeneratorInput,
   generateCandidates,
+  MAX_POOL,
+  plannedCourseIDsForSession,
+  poolCourseIDs,
   ScheduleCandidate,
   SectionRef,
 } from "~/app/scheduleGenerator";
@@ -31,6 +34,8 @@ const describeRef = (ref: SectionRef) =>
  * schedule" fills in the same courseSessions state SectionSelector's manual radio buttons would.
  * Picks can be locked (kept) or excluded (never chosen) and the run repeated; that refinement,
  * the option count and the units range are local to this panel and never written to the profile.
+ * Saved and planned courses can be added as a pool: the generator then chooses which of them to
+ * add so the total fits the units range, and "Use this schedule" adds the chosen ones.
  */
 const GeneratePanel = () => {
   const dispatch = useAppDispatch();
@@ -39,6 +44,9 @@ const GeneratePanel = () => {
   const scheduledKey = scheduled.join(",");
   const courseDetails = useFetchCourseInfos(scheduled);
   const { data: profile } = useFetchProfile();
+  const saved = useAppSelector((state) => state.user.bookmarked);
+  const [includeSaved, setIncludeSaved] = useState(false);
+  const [includePlanned, setIncludePlanned] = useState(false);
   const [candidates, setCandidates] = useState<ScheduleCandidate[] | null>(
     null
   );
@@ -55,10 +63,26 @@ const GeneratePanel = () => {
     max: profile?.workload?.unitsMax ?? null,
   };
 
-  // Drop stale options when the semester or course list changes.
+  const plannedIDs = plannedCourseIDsForSession(
+    profile?.plannedCourses ?? [],
+    selectedSession
+  );
+  const notScheduled = (ids: string[]) =>
+    ids.filter((id) => !scheduled.includes(id));
+  const pool = poolCourseIDs({
+    saved,
+    planned: plannedIDs,
+    scheduled,
+    includeSaved,
+    includePlanned,
+  });
+  const poolKey = pool.ids.join(",");
+  const poolDetails = useFetchCourseInfos(pool.ids);
+
+  // Drop stale options when the semester, course list or pool changes.
   useEffect(() => {
     setCandidates(null);
-  }, [selectedSession, scheduledKey]);
+  }, [selectedSession, scheduledKey, poolKey]);
 
   // Section names only mean something within one semester's schedule, so a new semester clears
   // every lock and exclusion. Removing a course only drops that course's.
@@ -75,13 +99,14 @@ const GeneratePanel = () => {
   const generate = () => {
     const input = buildGeneratorInput(
       scheduled,
-      courseDetails,
+      [...courseDetails, ...poolDetails],
       selectedSession,
       profile ?? emptyProfile(),
       {
         locks,
         excluded,
         maxCandidates,
+        poolIDs: pool.ids,
         unitsRange: unitsRange ?? undefined,
       }
     );
@@ -105,6 +130,14 @@ const GeneratePanel = () => {
 
   const applyCandidate = (candidate: ScheduleCandidate) => {
     dispatch(userSchedulesSlice.actions.setActiveScheduleCourses(scheduled));
+    // A pool course the generator chose has to join the schedule first: that is what creates its
+    // lecture/section entry and its colour, which the updates below only fill in.
+    for (const pick of candidate.picks) {
+      if (scheduled.includes(pick.courseID)) continue;
+      dispatch(
+        userSchedulesSlice.actions.addCourseToActiveSchedule(pick.courseID)
+      );
+    }
     const picked = new Set(candidate.picks.map((pick) => pick.courseID));
     // Clear leftover lecture/section picks from a previous semester for courses not in this result.
     for (const courseID of scheduled) {
@@ -190,6 +223,38 @@ const GeneratePanel = () => {
               max={LIMITS.units}
               onChange={(max) => setUnitsRange({ ...shownUnits, max })}
             />
+          </div>
+          <div className="mb-3 space-y-1 text-gray-500 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={includeSaved}
+                onChange={(e) => setIncludeSaved(e.target.checked)}
+              />
+              Also consider my Saved courses ({notScheduled(saved).length})
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={includePlanned}
+                onChange={(e) => setIncludePlanned(e.target.checked)}
+              />
+              Also consider courses planned for this semester (
+              {notScheduled(plannedIDs).length})
+            </label>
+            {pool.cut > 0 && (
+              <div className="text-gray-400 text-xs">
+                Only {MAX_POOL} are considered; {pool.cut} left out.
+              </div>
+            )}
+            {pool.ids.length > 0 &&
+              shownUnits.min === null &&
+              shownUnits.max === null && (
+                <div className="text-gray-400 text-xs">
+                  Set a units range above so the generator can choose which of
+                  these to add.
+                </div>
+              )}
           </div>
           {(locks.length > 0 || excluded.length > 0) && (
             <div className="mb-3 flex flex-wrap gap-2 text-sm">
