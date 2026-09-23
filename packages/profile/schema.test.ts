@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { profilePatchSchema, ratingPatchSchema, standardizeCourseID } from "./schema";
+import { profilePatchSchema, ratingPatchSchema, standardizeCourseID, savedFiltersSchema, emptyProfile } from "./schema";
 import { CAREERS } from "./taxonomy/careers";
 import { SKILLS } from "./taxonomy/skills";
 import { COLLEGES, MAJORS, majorsForCollege, MINORS } from "./taxonomy/colleges";
@@ -267,5 +267,100 @@ describe("ratingPatchSchema", () => {
         }
       }
     });
+  });
+});
+
+describe("savedFiltersSchema", () => {
+  const empty = {
+    departments: [],
+    unitsMin: null,
+    unitsMax: null,
+    sessions: [],
+    levels: [],
+    classTimes: [],
+    meetingDays: [],
+    timeBegin: null,
+    timeEnd: null,
+    fitAvailability: false,
+    matchGoals: false,
+  };
+  const parse = (over: object) => savedFiltersSchema.safeParse({ ...empty, ...over });
+
+  test("accepts a set with nothing chosen", () => {
+    expect(parse({}).success).toBe(true);
+  });
+
+  test("accepts a full set of choices", () => {
+    expect(
+      parse({
+        departments: ["Computer Science", "Mathematical Sciences"],
+        unitsMin: 9,
+        unitsMax: 12,
+        sessions: [
+          { year: "2026", semester: "fall", session: null },
+          { year: "2026", semester: "summer", session: "summer one" },
+        ],
+        levels: [1, 2, 6],
+        classTimes: ["morning", "tba"],
+        meetingDays: [1, 3, 5],
+        timeBegin: 480,
+        timeEnd: 1080,
+        fitAvailability: true,
+        matchGoals: true,
+      }).success
+    ).toBe(true);
+  });
+
+  test("rejects a level, weekday or minute out of range", () => {
+    expect(parse({ levels: [10] }).success).toBe(false);
+    expect(parse({ levels: [-1] }).success).toBe(false);
+    expect(parse({ meetingDays: [7] }).success).toBe(false);
+    expect(parse({ timeBegin: -1, timeEnd: 100 }).success).toBe(false);
+    expect(parse({ timeBegin: 100, timeEnd: 1441 }).success).toBe(false);
+  });
+
+  test("a time window needs both ends, in order", () => {
+    expect(parse({ timeBegin: 480 }).success).toBe(false);
+    expect(parse({ timeEnd: 600 }).success).toBe(false);
+    expect(parse({ timeBegin: 600, timeEnd: 600 }).success).toBe(false);
+    expect(parse({ timeBegin: 700, timeEnd: 600 }).success).toBe(false);
+  });
+
+  test("a units range needs both ends, in order", () => {
+    expect(parse({ unitsMin: 9 }).success).toBe(false);
+    expect(parse({ unitsMin: 30, unitsMax: 9 }).success).toBe(false);
+    expect(parse({ unitsMin: 9, unitsMax: 9 }).success).toBe(true);
+  });
+
+  test("only known class times, and a sub-session only on a summer", () => {
+    expect(parse({ classTimes: ["midnight"] }).success).toBe(false);
+    expect(parse({ sessions: [{ year: "2026", semester: "fall", session: "summer one" }] }).success).toBe(false);
+    expect(parse({ sessions: [{ year: "2026", semester: "summer", session: "summer nine" }] }).success).toBe(false);
+    expect(parse({ sessions: [{ year: "26", semester: "fall", session: null }] }).success).toBe(false);
+  });
+
+  test("caps the department and session lists and rejects unknown keys", () => {
+    expect(parse({ departments: Array.from({ length: 51 }, (_, i) => `Dept ${i}`) }).success).toBe(false);
+    expect(
+      parse({
+        sessions: Array.from({ length: 31 }, (_, i) => ({ year: String(1990 + i), semester: "fall", session: null })),
+      }).success
+    ).toBe(false);
+    expect(parse({ search: "hello" }).success).toBe(false);
+  });
+
+  test("removes duplicate departments, levels and days instead of failing", () => {
+    const result = parse({ departments: ["A", "A"], levels: [2, 2], meetingDays: [1, 1] });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({ departments: ["A"], levels: [2], meetingDays: [1] });
+  });
+});
+
+describe("profile patch: savedFilters", () => {
+  test("can be set or cleared, and a new profile has none", () => {
+    expect(profilePatchSchema.safeParse({ savedFilters: null }).success).toBe(true);
+    expect(emptyProfile().savedFilters).toBeNull();
+    expect(profilePatchSchema.safeParse({ savedFilters: { departments: [] } }).success).toBe(false); // must be complete
   });
 });

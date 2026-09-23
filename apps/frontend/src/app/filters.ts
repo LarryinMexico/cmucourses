@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { Session } from "./types";
-import type { Modality } from "@cmucourses/profile";
+import type { Modality, SavedFilters } from "@cmucourses/profile";
 import { standardizeIdsInString } from "./utils";
 
 /**
@@ -54,7 +54,7 @@ export interface FiltersState {
   exactResultsCourses: string[];
 }
 
-const initialState: FiltersState = {
+export const initialFiltersState: FiltersState = {
   search: "",
   departments: {
     active: false,
@@ -99,7 +99,7 @@ const initialState: FiltersState = {
 
 export const filtersSlice = createSlice({
   name: "filters",
-  initialState,
+  initialState: initialFiltersState,
   reducers: {
     updateSearch: (state, action: PayloadAction<string>) => {
       state.search = standardizeIdsInString(action.payload);
@@ -199,15 +199,57 @@ export const filtersSlice = createSlice({
       state.fitAvailability = action.payload;
     },
     resetFilters: (state) => {
-      state.departments = initialState.departments;
-      state.levels = initialState.levels;
-      state.units = initialState.units;
-      state.semesters = initialState.semesters;
-      state.classTimes = initialState.classTimes;
-      state.meetingDays = initialState.meetingDays;
-      state.timeRange = initialState.timeRange;
-      state.modalities = initialState.modalities;
-      state.fitAvailability = initialState.fitAvailability;
+      state.departments = initialFiltersState.departments;
+      state.levels = initialFiltersState.levels;
+      state.units = initialFiltersState.units;
+      state.semesters = initialFiltersState.semesters;
+      state.classTimes = initialFiltersState.classTimes;
+      state.meetingDays = initialFiltersState.meetingDays;
+      state.timeRange = initialFiltersState.timeRange;
+      state.modalities = initialFiltersState.modalities;
+      state.fitAvailability = initialFiltersState.fitAvailability;
+    },
+    /**
+     * Replaces every saved-able filter with a saved default, switching on the groups it has
+     * something for. The search text, the typeahead and the exact-match list stay as they are.
+     */
+    applySavedFilters: (state, action: PayloadAction<SavedFilters>) => {
+      const saved = action.payload;
+      state.departments = {
+        active: saved.departments.length > 0,
+        names: [...saved.departments],
+        query: "",
+      };
+      state.units =
+        saved.unitsMin !== null && saved.unitsMax !== null
+          ? { active: true, min: saved.unitsMin, max: saved.unitsMax }
+          : { ...initialFiltersState.units };
+      state.semesters = {
+        active: saved.sessions.length > 0,
+        sessions: saved.sessions.map(({ year, semester, session }) =>
+          session ? { year, semester, session } : { year, semester }
+        ),
+      };
+      state.levels = {
+        active: saved.levels.length > 0,
+        selected: initialFiltersState.levels.selected.map((_, level) =>
+          saved.levels.includes(level)
+        ),
+      };
+      state.classTimes = {
+        active: saved.classTimes.length > 0,
+        selected: [...saved.classTimes],
+      };
+      state.meetingDays = {
+        active: saved.meetingDays.length > 0,
+        selected: [...saved.meetingDays],
+      };
+      state.timeRange =
+        saved.timeBegin !== null && saved.timeEnd !== null
+          ? { active: true, begin: saved.timeBegin, end: saved.timeEnd }
+          : { ...initialFiltersState.timeRange };
+      state.fitAvailability = saved.fitAvailability;
+      state.page = 1;
     },
     setPage: (state, action: PayloadAction<number>) => {
       state.page = action.payload;

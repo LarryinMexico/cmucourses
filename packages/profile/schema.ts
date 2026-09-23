@@ -106,6 +106,68 @@ export const workloadSchema = z
     path: ["unitsMin"],
   });
 
+const dedupe = <T>(items: T[]): T[] => [...new Set(items)];
+
+export const CLASS_TIME_BUCKETS = ["morning", "afternoon", "evening", "tba"] as const;
+export const SAVED_SUMMER_SESSIONS = ["summer one", "summer two", "summer all"] as const;
+export const SAVED_FILTER_LIMITS = { departments: 50, sessions: 30 } as const;
+
+const savedSessionSchema = z
+  .object({
+    year: z.string().regex(/^\d{4}$/),
+    semester: z.enum(PROFILE_SEMESTERS),
+    session: z.enum(SAVED_SUMMER_SESSIONS).nullable(),
+  })
+  .strict()
+  .refine(({ semester, session }) => session === null || semester === "summer", {
+    message: "Only a summer can have a sub-session",
+    path: ["session"],
+  });
+
+/**
+ * The catalog search filters a student can keep as their default. Free text, the page number and
+ * anything derived (exact-match courses, the department typeahead) are deliberately not here.
+ * A group with nothing chosen is simply empty or null; the client derives its "active" flags.
+ */
+export const savedFiltersSchema = z
+  .object({
+    departments: z
+      .array(z.string().trim().min(1).max(100))
+      .max(SAVED_FILTER_LIMITS.departments, `At most ${SAVED_FILTER_LIMITS.departments} departments`)
+      .transform(dedupe),
+    unitsMin: nullableInt(0, LIMITS.units),
+    unitsMax: nullableInt(0, LIMITS.units),
+    sessions: z
+      .array(savedSessionSchema)
+      .max(SAVED_FILTER_LIMITS.sessions, `At most ${SAVED_FILTER_LIMITS.sessions} semesters`),
+    /** Course-number hundreds: 0 for 0xx up to 9 for 9xx. */
+    levels: z.array(z.number().int().min(0).max(9)).transform(dedupe),
+    classTimes: z.array(z.enum(CLASS_TIME_BUCKETS)).transform(dedupe),
+    meetingDays: z.array(z.number().int().min(0).max(6)).transform(dedupe),
+    timeBegin: nullableInt(0, 1439),
+    timeEnd: nullableInt(1, 1440),
+    fitAvailability: z.boolean(),
+    matchGoals: z.boolean(),
+  })
+  .strict()
+  .superRefine((filters, ctx) => {
+    const { unitsMin, unitsMax, timeBegin, timeEnd } = filters;
+    if ((unitsMin === null) !== (unitsMax === null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["unitsMax"], message: "Set both ends of the units range" });
+    } else if (unitsMin !== null && unitsMax !== null && unitsMin > unitsMax) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["unitsMin"],
+        message: "Minimum units must not exceed maximum units",
+      });
+    }
+    if ((timeBegin === null) !== (timeEnd === null)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["timeEnd"], message: "Set both ends of the time window" });
+    } else if (timeBegin !== null && timeEnd !== null && timeBegin >= timeEnd) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["timeEnd"], message: "Start time must be before end time" });
+    }
+  });
+
 export const busyBlockSchema = z
   .object({
     day: z.number().int().min(0).max(6), // 0 = Sunday
@@ -198,6 +260,7 @@ export const profilePatchSchema = z
         ...new Map(records.map((record) => [`${record.year}:${record.semester}:${record.courseID}`, record])).values(),
       ]),
     visibility: visibilitySchema,
+    savedFilters: savedFiltersSchema.nullable(),
     completeOnboarding: z.literal(true),
   })
   .partial()
@@ -210,6 +273,7 @@ export type CourseRecord = z.output<typeof courseRecordSchema>;
 export type SchedulePreferences = z.output<typeof schedulePreferencesSchema>;
 export type PlannedCourse = z.output<typeof plannedCourseSchema>;
 export type ProfileVisibility = z.output<typeof visibilitySchema>;
+export type SavedFilters = z.output<typeof savedFiltersSchema>;
 /** What the client sends. */
 export type ProfilePatchInput = z.input<typeof profilePatchSchema>;
 /** What the server applies after validation and normalization. */
@@ -230,6 +294,8 @@ export interface Profile {
   courses: CourseRecord[];
   plannedCourses: PlannedCourse[];
   visibility: ProfileVisibility;
+  /** The search filters kept as this student's default, if any. Never shown to other students. */
+  savedFilters: SavedFilters | null;
   onboardedAt: string | null;
   updatedAt: string | null;
 }
@@ -263,6 +329,7 @@ export const emptyProfile = (): Profile => ({
   courses: [],
   plannedCourses: [],
   visibility: { ...DEFAULT_VISIBILITY },
+  savedFilters: null,
   onboardedAt: null,
   updatedAt: null,
 });

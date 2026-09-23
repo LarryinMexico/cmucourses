@@ -240,6 +240,29 @@ type ProfilesVisibility {
   courses  Visibility @default(PRIVATE)
 }
 
+type ProfilesSavedSession {
+  year     String
+  semester String
+  /// "summer one" | "summer two" | "summer all"; only on a summer
+  session  String?
+}
+
+/// The catalog search filters kept as the student's default. Private to them: never in social output.
+type ProfilesSavedFilters {
+  departments     String[]
+  unitsMin        Int?
+  unitsMax        Int?
+  sessions        ProfilesSavedSession[]
+  /// hundreds digit of the course number: 0 for 0xx ... 9 for 9xx
+  levels          Int[]
+  classTimes      String[]
+  meetingDays     Int[]
+  timeBegin       Int?
+  timeEnd         Int?
+  fitAvailability Boolean
+  matchGoals      Boolean
+}
+
 model profiles {
   id                  String                       @id @default(auto()) @map("_id") @db.ObjectId
   clerkUserId         String                       @unique
@@ -257,6 +280,7 @@ model profiles {
   courses             ProfilesCourses[]
   plannedCourses      ProfilesPlannedCourses[]
   visibility          ProfilesVisibility
+  savedFilters        ProfilesSavedFilters?
   onboardedAt         DateTime?
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt

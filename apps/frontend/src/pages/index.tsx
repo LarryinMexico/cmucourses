@@ -6,8 +6,10 @@ import SearchBar from "~/components/SearchBar";
 import CourseSearchList from "~/components/CourseSearchList";
 import React from "react";
 import { Page } from "~/components/Page";
+import { useApplyDefaultFilters } from "~/app/defaultFilters";
 
 const IndexPage: NextPage = () => {
+  useApplyDefaultFilters();
   return (
     <Page
       sidebar={

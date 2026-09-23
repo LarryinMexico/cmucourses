@@ -1,4 +1,4 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export interface UIState {
   darkMode: boolean;
@@ -30,6 +30,9 @@ export const uiSlice = createSlice({
     },
     toggleMatchGoals: (state) => {
       state.matchGoals = !state.matchGoals;
+    },
+    setMatchGoals: (state, action: PayloadAction<boolean>) => {
+      state.matchGoals = action.payload;
     },
   },
 });

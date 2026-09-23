@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import db from "@cmucourses/db";
 import {
+  CLASS_TIME_BUCKETS,
   DEFAULT_SCHEDULE_PREFERENCES,
   DEFAULT_VISIBILITY,
   emptyProfile,
@@ -9,6 +10,7 @@ import {
   profilePatchSchema,
   ProfilePatchInput,
   ProfileSemester,
+  SAVED_SUMMER_SESSIONS,
 } from "@cmucourses/profile";
 import { PrismaReturn } from "~/util";
 import { UserLocals } from "~/controllers/user";
@@ -23,6 +25,12 @@ type ValidationError = {
 // Semesters are plain strings in Mongo; anything unexpected reads back as unset.
 const toSemester = (semester: string | null | undefined): ProfileSemester | null =>
   PROFILE_SEMESTERS.find((known) => known === semester) ?? null;
+
+const isClassTimeBucket = (value: string): value is (typeof CLASS_TIME_BUCKETS)[number] =>
+  (CLASS_TIME_BUCKETS as readonly string[]).includes(value);
+
+const toSavedSession = (session: string | null | undefined) =>
+  SAVED_SUMMER_SESSIONS.find((known) => known === session) ?? null;
 
 const toProfile = (doc: ProfileDoc): Profile => ({
   displayName: doc.displayName,
@@ -65,6 +73,26 @@ const toProfile = (doc: ProfileDoc): Profile => ({
     year,
   })),
   visibility: doc.visibility,
+  // A stored optional column that was never set is absent, not null, so each one is normalized.
+  savedFilters: doc.savedFilters
+    ? {
+        departments: doc.savedFilters.departments,
+        unitsMin: doc.savedFilters.unitsMin ?? null,
+        unitsMax: doc.savedFilters.unitsMax ?? null,
+        sessions: doc.savedFilters.sessions.map(({ year, semester, session }) => ({
+          year,
+          semester: toSemester(semester) ?? "fall",
+          session: toSavedSession(session),
+        })),
+        levels: doc.savedFilters.levels,
+        classTimes: doc.savedFilters.classTimes.filter(isClassTimeBucket),
+        meetingDays: doc.savedFilters.meetingDays,
+        timeBegin: doc.savedFilters.timeBegin ?? null,
+        timeEnd: doc.savedFilters.timeEnd ?? null,
+        fitAvailability: doc.savedFilters.fitAvailability,
+        matchGoals: doc.savedFilters.matchGoals,
+      }
+    : null,
   onboardedAt: doc.onboardedAt?.toISOString() ?? null,
   updatedAt: doc.updatedAt.toISOString(),
 });
