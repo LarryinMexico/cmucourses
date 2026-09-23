@@ -3,12 +3,13 @@ import {
   availabilityFit,
   meetingGroupsFor,
   type AvailabilityFit,
+  type BusyBlock,
 } from "@cmucourses/profile";
 import { useAuth } from "@clerk/nextjs";
 import { useFetchProfile } from "./api/profile";
 import { useAppSelector } from "./hooks";
 import { Schedule } from "./types";
-import { compareSessions, filterSessions } from "./utils";
+import { schedulesInScope } from "./courseFilterPredicates";
 
 /**
  * Scores a course against the user's saved weekly busy times.
@@ -27,19 +28,10 @@ export const useAvailabilityFit = (
   return useMemo(() => {
     if (!isSignedIn || !busyBlocks || busyBlocks.length === 0) return null;
 
-    const all = schedules || [];
-    let scoped: Schedule[];
-    if (semesters?.active && semesters.sessions.length > 0) {
-      const keys = new Set(
-        semesters.sessions.map((s) => `${s.year}-${s.semester}`)
-      );
-      scoped = all.filter((schedule) =>
-        keys.has(`${schedule.year}-${schedule.semester}`)
-      );
-    } else {
-      const mostRecent = filterSessions(all).sort(compareSessions)[0];
-      scoped = mostRecent ? [mostRecent] : [];
-    }
+    const scoped = schedulesInScope(
+      schedules || [],
+      semesters?.active ? semesters.sessions : undefined
+    );
     if (scoped.length === 0) return null;
 
     // Prefer FITS if any scoped offering fits; otherwise report the first conflict.
@@ -59,4 +51,26 @@ export const useAvailabilityFit = (
     }
     return firstConflict;
   }, [isSignedIn, busyBlocks, schedules, semesters]);
+};
+
+const NO_BUSY: BusyBlock[] = [];
+
+/**
+ * What the catalog search has to fit around: the profile's busy blocks when "Only courses that fit
+ * my availability" is on, otherwise nothing. `waiting` holds the search back while a rehydrated
+ * toggle's busy times are still loading, so it never fires once unfiltered and again filtered
+ * (isLoading, not isPending: signed out, the profile query never runs and never will).
+ */
+export const useSearchBusyBlocks = (): {
+  busy: BusyBlock[];
+  waiting: boolean;
+} => {
+  const fitAvailability = useAppSelector(
+    (state) => state.filters.fitAvailability
+  );
+  const { data: profile, isLoading } = useFetchProfile();
+  return {
+    busy: fitAvailability && profile ? profile.busyBlocks : NO_BUSY,
+    waiting: !!fitAvailability && isLoading,
+  };
 };

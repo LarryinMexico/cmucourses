@@ -10,6 +10,7 @@ import { Pagination } from "./Pagination";
 import { filtersSlice } from "~/app/filters";
 import { useMatchGoalsCourseIDs } from "~/app/matchGoals";
 import { useFetchProfile } from "~/app/api/profile";
+import { useSearchBusyBlocks } from "~/app/availability";
 import {
   ClientCourseFilters,
   courseMatchesClientFilters,
@@ -18,11 +19,11 @@ import type { Course } from "~/app/types";
 
 const PAGE_SIZE = 10;
 
-/** Client-side only: fit-availability, plus meeting/time for Match-my-goals lists (no /search). */
-const useClientFilteredCourses = (
-  courses: Course[],
-  opts: { includeScheduleFilters: boolean }
-) => {
+/**
+ * Match-my-goals lists never go through /search, so their schedule filters (meeting days, time
+ * window, fit availability) are applied here. Catalog search does all of it on the backend.
+ */
+const useClientFilteredCourses = (courses: Course[]) => {
   const meetingDays = useAppSelector((state) => state.filters.meetingDays);
   const timeRange = useAppSelector((state) => state.filters.timeRange);
   const fitAvailability = useAppSelector(
@@ -39,15 +40,12 @@ const useClientFilteredCourses = (
     const filters: ClientCourseFilters = {
       sessions,
       meetingDays:
-        opts.includeScheduleFilters &&
-        meetingDays?.active &&
-        meetingDays.selected.length > 0
+        meetingDays?.active && meetingDays.selected.length > 0
           ? meetingDays.selected
           : undefined,
-      timeRange:
-        opts.includeScheduleFilters && timeRange?.active
-          ? { begin: timeRange.begin, end: timeRange.end }
-          : undefined,
+      timeRange: timeRange?.active
+        ? { begin: timeRange.begin, end: timeRange.end }
+        : undefined,
       // Skip while profile is loading so a rehydrated flag does not empty the list.
       fitAvailability: !profilePending && (fitAvailability ?? false),
     };
@@ -61,7 +59,6 @@ const useClientFilteredCourses = (
     );
   }, [
     courses,
-    opts.includeScheduleFilters,
     meetingDays,
     timeRange,
     fitAvailability,
@@ -77,9 +74,7 @@ const CoursePage = ({ courseIDs }: { courseIDs: string[] }) => {
   const showSchedules = useAppSelector((state) => state.user.showSchedules);
 
   const results = useFetchCourseInfos(courseIDs);
-  const filteredResults = useClientFilteredCourses(results, {
-    includeScheduleFilters: true,
-  });
+  const filteredResults = useClientFilteredCourses(results);
   const filteredIDs = new Set(filteredResults.map((course) => course.courseID));
   const visibleCourseIDs = courseIDs.filter((courseID) =>
     filteredIDs.has(courseID)
@@ -115,7 +110,11 @@ const CoursePage = ({ courseIDs }: { courseIDs: string[] }) => {
 const SearchCoursePage = () => {
   const page = useAppSelector((state) => state.filters.page);
 
-  const { data: { docs } = {} } = useFetchCourseInfosByPage();
+  const { busy, waiting } = useSearchBusyBlocks();
+  const { data: { docs } = {} } = useFetchCourseInfosByPage({
+    enabled: !waiting,
+    busy,
+  });
 
   const exactResultsCourses = useAppSelector(
     (state) => state.filters.exactResultsCourses
@@ -145,24 +144,11 @@ const SearchCoursePage = () => {
   }, [exactResultsCourses, docs, page]);
 
   const results = useFetchCourseInfos(coursesToShow);
-  // Meeting days / time window are server-side on /search; only fit-availability stays here.
-  const filteredResults = useClientFilteredCourses(results, {
-    includeScheduleFilters: false,
-  });
-  const filteredIDs = new Set(filteredResults.map((course) => course.courseID));
-  const visibleCourses = coursesToShow.filter((courseID) =>
-    filteredIDs.has(courseID)
-  );
 
   return (
     <div className="space-y-4">
-      {results && visibleCourses.length === 0 && coursesToShow.length > 0 && (
-        <div className="mt-6 text-center text-gray-400">
-          No courses on this page match the schedule filters.
-        </div>
-      )}
       {results &&
-        visibleCourses.map((courseID) => (
+        coursesToShow.map((courseID) => (
           <CourseCard
             courseID={courseID}
             key={courseID}
@@ -182,8 +168,9 @@ const CourseSearchList = () => {
     ready: goalsReady,
     courseIDs: goalIDs,
   } = useMatchGoalsCourseIDs();
+  const { busy, waiting } = useSearchBusyBlocks();
   const { isPending, data: { totalPages: searchTotalPages } = {} } =
-    useFetchCourseInfosByPage({ enabled: !goalsActive });
+    useFetchCourseInfosByPage({ enabled: !goalsActive && !waiting, busy });
 
   const dispatch = useAppDispatch();
 

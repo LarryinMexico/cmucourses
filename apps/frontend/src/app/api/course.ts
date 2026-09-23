@@ -5,6 +5,7 @@ import { Course, Session } from "~/app/types";
 import { STALE_TIME } from "~/app/constants";
 import { FiltersState } from "~/app/filters";
 import { useAppSelector } from "~/app/hooks";
+import type { BusyBlock } from "@cmucourses/profile";
 
 export type FetchCourseInfosByPageResult = {
   docs: Course[];
@@ -19,8 +20,11 @@ export type FetchCourseInfosByPageResult = {
   nextPage: number | null;
 };
 
+const NO_BUSY: BusyBlock[] = [];
+
 const fetchCourseInfosByPage = async (
-  filters: FiltersState
+  filters: FiltersState,
+  busy: BusyBlock[]
 ): Promise<FetchCourseInfosByPageResult> => {
   const url = `${process.env.NEXT_PUBLIC_BACKEND_URL || ""}/courses/search?`;
   const params = new URLSearchParams({
@@ -64,6 +68,12 @@ const fetchCourseInfosByPage = async (
     params.append("timeEnd", filters.timeRange.end.toString());
   }
 
+  // "Only courses that fit my availability" is decided by the backend (fitAvailabilityStage), so
+  // every page is full and the page count is right. Blocks travel as `day,begin,end`.
+  busy.forEach((block) =>
+    params.append("busy", `${block.day},${block.begin},${block.end}`)
+  );
+
   if (filters.levels.active) {
     let value = "";
     filters.levels.selected.forEach((elem, index) => {
@@ -83,12 +93,21 @@ const fetchCourseInfosByPage = async (
   return response.data;
 };
 
-export const useFetchCourseInfosByPage = (options?: { enabled?: boolean }) => {
+/**
+ * `busy` is what the search must fit around (see useSearchBusyBlocks). It comes from the caller
+ * rather than being read here: this module is imported by low-level helpers that must stay free
+ * of the Clerk/profile layer.
+ */
+export const useFetchCourseInfosByPage = (options?: {
+  enabled?: boolean;
+  busy?: BusyBlock[];
+}) => {
   const filters = useAppSelector((state) => state.filters);
+  const busy = options?.busy ?? NO_BUSY;
 
   return useQuery({
-    queryKey: ["courseInfosByPage", filters],
-    queryFn: () => fetchCourseInfosByPage(filters),
+    queryKey: ["courseInfosByPage", filters, busy],
+    queryFn: () => fetchCourseInfosByPage(filters, busy),
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
     enabled: options?.enabled ?? true,

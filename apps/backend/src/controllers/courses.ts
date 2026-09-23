@@ -10,6 +10,14 @@ import {
 } from "~/util";
 import { RequestHandler } from "express";
 import db, { Prisma } from "@cmucourses/db";
+import {
+  catalogTimeToMinutes,
+  fitAvailabilityStage,
+  parseBusyBlocks,
+  parseSessions,
+  sessionMatchesExpr,
+  timedEntries,
+} from "./courseQuery";
 
 const projection = { _id: false, __v: false };
 const MAX_LIMIT = 10;
@@ -30,50 +38,6 @@ const CLASS_TIME_PATTERNS = {
 type ClassTime = keyof typeof CLASS_TIME_PATTERNS;
 
 const isClassTime = (value: string): value is ClassTime => value in CLASS_TIME_PATTERNS;
-
-/** Aggregation expression: catalog "HH:MMAM"/"HH:MMPM" -> minutes after midnight, else null. */
-const catalogTimeToMinutes = (timeExpr: string): Prisma.InputJsonValue =>
-  ({
-    $let: {
-      vars: {
-        t: timeExpr,
-        // `vars` are evaluated even when the regex guard below rejects the value, and "TBA"
-        // is a real catalog value, so a plain $toInt would abort the whole aggregation.
-        hour: { $convert: { input: { $substrBytes: [timeExpr, 0, 2] }, to: "int", onError: null } },
-        minute: { $convert: { input: { $substrBytes: [timeExpr, 3, 2] }, to: "int", onError: null } },
-        meridiem: { $toUpper: { $substrBytes: [timeExpr, 5, 2] } },
-      },
-      in: {
-        $cond: [
-          {
-            $not: {
-              $regexMatch: { input: "$$t", regex: "^\\d{2}:\\d{2}(AM|PM)$" },
-            },
-          },
-          null,
-          {
-            $add: [
-              "$$minute",
-              {
-                $multiply: [
-                  60,
-                  {
-                    $cond: [
-                      { $eq: ["$$meridiem", "PM"] },
-                      {
-                        $cond: [{ $eq: ["$$hour", 12] }, 12, { $add: ["$$hour", 12] }],
-                      },
-                      { $cond: [{ $eq: ["$$hour", 12] }, 0, "$$hour"] },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    },
-  }) as Prisma.InputJsonValue;
 
 export interface GetCourseById {
   params: {
@@ -167,6 +131,11 @@ export interface GetFilteredCourses {
      */
     timeBegin?: string;
     timeEnd?: string;
+    /**
+     * Weekly busy blocks as `day,begin,end` (minutes after midnight, day 0 = Sunday), repeated.
+     * Keeps only courses that fit around them; see fitAvailabilityStage.
+     */
+    busy?: SingleOrArray<string>;
     fces?: BoolLiteral;
   };
 }
@@ -234,18 +203,9 @@ export const getFilteredCourses: RequestHandler<
     });
   }
 
-  const sessions =
-    req.query.session === undefined
-      ? []
-      : singleToArray(req.query.session).flatMap((serializedSession) => {
-          try {
-            const session = JSON.parse(serializedSession);
-            return [{ year: parseInt(session.year), semester: session.semester }];
-          } catch {
-            // SyntaxError
-            return [];
-          }
-        });
+  const sessions = req.query.session === undefined ? [] : parseSessions(singleToArray(req.query.session));
+
+  const busyBlocks = req.query.busy === undefined ? [] : parseBusyBlocks(singleToArray(req.query.busy));
 
   const classTimes =
     req.query.classTimes === undefined
@@ -274,7 +234,8 @@ export const getFilteredCourses: RequestHandler<
     sessions.length > 0 ||
     classTimes.length > 0 ||
     meetingDays.length > 0 ||
-    hasTimeWindow;
+    hasTimeWindow ||
+    busyBlocks.length > 0;
 
   // Session / class-time / meeting-days / time-window all read joined schedules, so the
   // lookup runs whenever any of them is active — not only when the caller asked for
@@ -375,14 +336,6 @@ export const getFilteredCourses: RequestHandler<
 
     // A meeting (lecture or section) can be attended inside the window when every entry
     // that states a time fits; TBA entries carry no information, so they are neutral.
-    const timedEntries = (meetingVar: string) => ({
-      $filter: {
-        input: { $ifNull: [`$$${meetingVar}.times`, []] },
-        as: "t",
-        cond: { $ne: [catalogTimeToMinutes("$$t.begin"), null] },
-      },
-    });
-
     const meetingFits = {
       $let: {
         vars: { timed: timedEntries("m") },
@@ -423,14 +376,7 @@ export const getFilteredCourses: RequestHandler<
     const scheduleConds: unknown[] = [windowFits];
 
     if (sessions.length > 0) {
-      scheduleConds.push({
-        $or: sessions.map((session) => ({
-          $and: [
-            { $eq: ["$$sched.year", session.year] },
-            { $eq: ["$$sched.semester", session.semester] },
-          ],
-        })),
-      });
+      scheduleConds.push({ $or: sessions.map((session) => sessionMatchesExpr("sched", session)) });
     }
 
     if (classTimes.length > 0) {
@@ -483,6 +429,8 @@ export const getFilteredCourses: RequestHandler<
       },
     } as Prisma.InputJsonValue);
   }
+
+  if (busyBlocks.length > 0) pipeline.push(fitAvailabilityStage(busyBlocks, sessions));
 
   pipeline.push({ $addFields: addedFields as Prisma.InputJsonValue });
   pipeline.push({ $project: projection as Prisma.InputJsonValue });

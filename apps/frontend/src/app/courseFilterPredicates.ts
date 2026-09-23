@@ -20,16 +20,27 @@ const allTimes = (schedule: Schedule): Time[] => [
   ...schedule.sections.flatMap((section) => section.times || []),
 ];
 
-const schedulesInScope = (
+/**
+ * Is this schedule one of the chosen "Offered in" sessions? A summer choice with a sub-session
+ * (Summer One) only matches that sub-session; a plain Summer choice matches all of them.
+ * The API sends `year` as a number and a chosen Session holds it as a string, hence String().
+ */
+const scheduleInSession = (schedule: Schedule, session: Session): boolean =>
+  String(schedule.year) === String(session.year) &&
+  schedule.semester === session.semester &&
+  (!session.session || schedule.session === session.session);
+
+/**
+ * The offerings a course is judged on: the chosen sessions, else only the most recent one.
+ * The backend's fitAvailabilityStage mirrors this; keep the two in step.
+ */
+export const schedulesInScope = (
   schedules: Schedule[],
   sessions: Session[] | undefined
 ): Schedule[] => {
   if (sessions && sessions.length > 0) {
-    const keys = new Set(
-      sessions.map((session) => `${session.year}-${session.semester}`)
-    );
     return schedules.filter((schedule) =>
-      keys.has(`${schedule.year}-${schedule.semester}`)
+      sessions.some((session) => scheduleInSession(schedule, session))
     );
   }
   const mostRecent = filterSessions(schedules).sort(compareSessions)[0];

@@ -52,9 +52,9 @@ describe("courseMatchesClientFilters", () => {
   });
 
   test("Monday-only keeps Mon+Wed meetings (any-day match)", () => {
-    expect(
-      courseMatchesClientFilters(course(), { meetingDays: [1] }, [])
-    ).toBe(true);
+    expect(courseMatchesClientFilters(course(), { meetingDays: [1] }, [])).toBe(
+      true
+    );
   });
 
   test("fit availability with no busy blocks does not hide courses", () => {
@@ -124,5 +124,72 @@ describe("courseMatchesClientFilters", () => {
         []
       )
     ).toBe(false);
+  });
+
+  describe("summer sub-sessions", () => {
+    const summer = (): Course => {
+      const base = course();
+      const lecture = (name: string, day: number) => ({
+        name,
+        instructors: [],
+        location: "Pittsburgh",
+        times: [
+          {
+            days: [day],
+            begin: "10:00AM",
+            end: "10:50AM",
+            building: "WEH",
+            room: "1",
+          },
+        ],
+      });
+      base.schedules = [
+        {
+          courseID: "15-213",
+          year: "2026",
+          semester: "summer",
+          session: "summer one",
+          lectures: [lecture("Lec 1", 1)],
+          sections: [],
+        },
+        {
+          courseID: "15-213",
+          year: "2026",
+          semester: "summer",
+          session: "summer two",
+          lectures: [lecture("Lec 1", 2)],
+          sections: [],
+        },
+      ];
+      return base;
+    };
+    const monday = { meetingDays: [1] };
+    const tuesday = { meetingDays: [2] };
+
+    it("a chosen sub-session only looks at that sub-session", () => {
+      const one = [
+        {
+          year: "2026",
+          semester: "summer" as const,
+          session: "summer one" as const,
+        },
+      ];
+      expect(
+        courseMatchesClientFilters(summer(), { ...monday, sessions: one }, [])
+      ).toBe(true);
+      expect(
+        courseMatchesClientFilters(summer(), { ...tuesday, sessions: one }, [])
+      ).toBe(false);
+    });
+
+    it("a plain Summer choice covers every sub-session", () => {
+      const any = [{ year: "2026", semester: "summer" as const }];
+      expect(
+        courseMatchesClientFilters(summer(), { ...monday, sessions: any }, [])
+      ).toBe(true);
+      expect(
+        courseMatchesClientFilters(summer(), { ...tuesday, sessions: any }, [])
+      ).toBe(true);
+    });
   });
 });

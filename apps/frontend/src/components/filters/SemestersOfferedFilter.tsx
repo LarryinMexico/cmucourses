@@ -4,30 +4,35 @@ import { ChevronUpDownIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import React from "react";
 import { filtersSlice } from "~/app/filters";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
-import { Session } from "~/app/types";
+import { Session, SummerSession } from "~/app/types";
 import { classNames, sessionToShortString, sessionToString } from "~/app/utils";
 
+// Every semester back to Fall 2020, with the summer sub-sessions the catalog records next to each
+// summer. Qatar summer is left out, as everywhere else (see filterSessions in utils).
+const SUMMER_SESSIONS: SummerSession[] = [
+  "summer one",
+  "summer two",
+  "summer all",
+];
+
+const YEARS = ["2026", "2025", "2024", "2023", "2022", "2021"];
+
 const SESSIONS: Session[] = [
-  { year: "2026", semester: "fall" },
-  { year: "2026", semester: "summer" },
-  { year: "2026", semester: "spring" },
-  { year: "2025", semester: "fall" },
-  { year: "2025", semester: "summer" },
-  { year: "2025", semester: "spring" },
-  { year: "2024", semester: "fall" },
-  { year: "2024", semester: "summer" },
-  { year: "2024", semester: "spring" },
-  { year: "2023", semester: "fall" },
-  { year: "2023", semester: "summer" },
-  { year: "2023", semester: "spring" },
-  { year: "2022", semester: "fall" },
-  { year: "2022", semester: "summer" },
-  { year: "2022", semester: "spring" },
-  { year: "2021", semester: "fall" },
-  { year: "2021", semester: "summer" },
-  { year: "2021", semester: "spring" },
+  ...YEARS.flatMap((year): Session[] => [
+    { year, semester: "fall" },
+    { year, semester: "summer" },
+    ...SUMMER_SESSIONS.map(
+      (session): Session => ({ year, semester: "summer", session })
+    ),
+    { year, semester: "spring" },
+  ]),
   { year: "2020", semester: "fall" },
 ];
+
+// A chosen session comes back from redux-persist as a new object, so identity cannot tell which
+// list entries are selected; compare by what it says instead.
+const sameSession = (a: Session, b: Session) =>
+  sessionToString(a) === sessionToString(b);
 
 const SemestersOfferedFilter = () => {
   const dispatch = useAppDispatch();
@@ -47,7 +52,12 @@ const SemestersOfferedFilter = () => {
 
   return (
     <div className="relative mt-1 text-gray-500 text-sm">
-      <Listbox value={sessions} onChange={setSessions} multiple>
+      <Listbox
+        value={sessions}
+        onChange={setSessions}
+        by={sameSession}
+        multiple
+      >
         <Listbox.Label className="flex">
           <div>
             <input

@@ -126,7 +126,8 @@ export const filtersSlice = createSlice({
         (session) =>
           !(
             session.year === action.payload.year &&
-            session.semester === action.payload.semester
+            session.semester === action.payload.semester &&
+            (session.session ?? null) === (action.payload.session ?? null)
           )
       );
       if (state.semesters.sessions.length === 0) state.semesters.active = false;
