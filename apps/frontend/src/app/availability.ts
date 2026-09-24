@@ -10,6 +10,7 @@ import { useFetchProfile } from "./api/profile";
 import { useAppSelector } from "./hooks";
 import { Schedule } from "./types";
 import { schedulesInScope } from "./courseFilterPredicates";
+import { useFetchCourseInfosByPage } from "./api/course";
 
 /**
  * Scores a course against the user's saved weekly busy times.
@@ -73,4 +74,17 @@ export const useSearchBusyBlocks = (): {
     busy: fitAvailability && profile ? profile.busyBlocks : NO_BUSY,
     waiting: !!fitAvailability && isLoading,
   };
+};
+
+/**
+ * The current page of catalog search results: the filters in the store plus the busy blocks the
+ * availability filter needs. Every component that reads the results (the list, the result count)
+ * must go through this so they all ask the same question.
+ */
+export const useSearchPage = (options?: { enabled?: boolean }) => {
+  const { busy, waiting } = useSearchBusyBlocks();
+  return useFetchCourseInfosByPage({
+    enabled: (options?.enabled ?? true) && !waiting,
+    busy,
+  });
 };

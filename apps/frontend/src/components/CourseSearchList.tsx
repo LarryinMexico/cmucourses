@@ -2,15 +2,12 @@ import React, { useEffect, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import CourseCard from "./CourseCard";
 import Loading from "./Loading";
-import {
-  useFetchCourseInfos,
-  useFetchCourseInfosByPage,
-} from "~/app/api/course";
+import { useFetchCourseInfos } from "~/app/api/course";
 import { Pagination } from "./Pagination";
 import { filtersSlice } from "~/app/filters";
 import { useMatchGoalsCourseIDs } from "~/app/matchGoals";
 import { useFetchProfile } from "~/app/api/profile";
-import { useSearchBusyBlocks } from "~/app/availability";
+import { useSearchPage } from "~/app/availability";
 import {
   ClientCourseFilters,
   courseMatchesClientFilters,
@@ -110,11 +107,7 @@ const CoursePage = ({ courseIDs }: { courseIDs: string[] }) => {
 const SearchCoursePage = () => {
   const page = useAppSelector((state) => state.filters.page);
 
-  const { busy, waiting } = useSearchBusyBlocks();
-  const { data: { docs } = {} } = useFetchCourseInfosByPage({
-    enabled: !waiting,
-    busy,
-  });
+  const { data: { docs } = {} } = useSearchPage();
 
   const exactResultsCourses = useAppSelector(
     (state) => state.filters.exactResultsCourses
@@ -168,9 +161,8 @@ const CourseSearchList = () => {
     ready: goalsReady,
     courseIDs: goalIDs,
   } = useMatchGoalsCourseIDs();
-  const { busy, waiting } = useSearchBusyBlocks();
   const { isPending, data: { totalPages: searchTotalPages } = {} } =
-    useFetchCourseInfosByPage({ enabled: !goalsActive && !waiting, busy });
+    useSearchPage({ enabled: !goalsActive });
 
   const dispatch = useAppDispatch();
 

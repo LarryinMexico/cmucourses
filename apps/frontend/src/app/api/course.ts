@@ -20,8 +20,6 @@ export type FetchCourseInfosByPageResult = {
   nextPage: number | null;
 };
 
-const NO_BUSY: BusyBlock[] = [];
-
 const fetchCourseInfosByPage = async (
   filters: FiltersState,
   busy: BusyBlock[]
@@ -94,23 +92,25 @@ const fetchCourseInfosByPage = async (
 };
 
 /**
- * `busy` is what the search must fit around (see useSearchBusyBlocks). It comes from the caller
- * rather than being read here: this module is imported by low-level helpers that must stay free
- * of the Clerk/profile layer.
+ * `busy` is what the search must fit around. It is required, and comes from the caller rather
+ * than being read here, because this module is imported by low-level helpers that must stay free
+ * of the Clerk/profile layer. Call useSearchPage (app/availability.ts) instead of this directly:
+ * a caller that leaves `busy` out silently asks a different question (a different query key), and
+ * that is how the results count once ignored the availability filter.
  */
-export const useFetchCourseInfosByPage = (options?: {
+export const useFetchCourseInfosByPage = (options: {
   enabled?: boolean;
-  busy?: BusyBlock[];
+  busy: BusyBlock[];
 }) => {
   const filters = useAppSelector((state) => state.filters);
-  const busy = options?.busy ?? NO_BUSY;
+  const { busy } = options;
 
   return useQuery({
     queryKey: ["courseInfosByPage", filters, busy],
     queryFn: () => fetchCourseInfosByPage(filters, busy),
     staleTime: STALE_TIME,
     placeholderData: keepPreviousData,
-    enabled: options?.enabled ?? true,
+    enabled: options.enabled ?? true,
   });
 };
 

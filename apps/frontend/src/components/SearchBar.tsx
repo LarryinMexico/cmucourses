@@ -12,7 +12,7 @@ import {
 import { filtersSlice } from "~/app/filters";
 import { getPillboxes } from "./filters/LevelFilter";
 import { CLASS_TIME_SHORT_LABELS } from "./filters/ClassTimesFilter";
-import { useFetchCourseInfosByPage } from "~/app/api/course";
+import { useSearchPage } from "~/app/availability";
 import { useAuth } from "@clerk/nextjs";
 import { usePostHog } from "posthog-js/react";
 import { useMatchGoalsCourseIDs } from "~/app/matchGoals";
@@ -248,7 +248,7 @@ const SearchBar = () => {
 
   const { active: goalsActive, courseIDs: goalIDs } = useMatchGoalsCourseIDs();
   const { data: { totalDocs: searchNumResults } = {} } =
-    useFetchCourseInfosByPage({ enabled: !goalsActive });
+    useSearchPage({ enabled: !goalsActive });
   const numResults = goalsActive ? goalIDs.length : searchNumResults;
 
   return (
