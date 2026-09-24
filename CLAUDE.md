@@ -42,6 +42,8 @@ CI (`.github/workflows/lint.yml`, on PRs) = generate prisma client → eslint + 
 
 ## Environment
 
+**Start the apps from the repo root** (`bun run dev`), not from `apps/frontend`: the env file is the root `.env` (copy `.env.template`), and Nx loads it into each task. Running `next dev` inside `apps/frontend` finds no Clerk keys and 500s with `Missing publishableKey`. To try the app without touching your real data, override on the command line (process env wins over `.env`): `MONGODB_URI=<local replica set> NEXT_PUBLIC_BACKEND_URL=http://localhost:3000 NEXT_PUBLIC_PROFILE_BACKEND_URL=http://localhost:3000 bun run dev`, and confirm `GET /courses/search` reports your catalog's `totalDocs` before signing in.
+
 - Frontend: `NEXT_PUBLIC_BACKEND_URL` (no trailing slash), `NEXT_PUBLIC_PROFILE_BACKEND_URL` (backend serving `/user/profile`; falls back to `NEXT_PUBLIC_BACKEND_URL`, which has no profile routes when it points at the public API), `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, Clerk publishable/secret keys.
 - Backend: `MONGODB_URI` (read by `schema.prisma`), `PORT`, `AUTH_ENABLED`, `CLERK_PEM_KEY`, `BACKEND_ENV`, `CLERK_LOGIN_HOST`. `CLERK_PEM_KEY` must be the public key of the Clerk instance the frontend signs in with (derive it from `https://<frontendApi>/.well-known/jwks.json`); profile routes need it even when `AUTH_ENABLED=false`.
 - Local profile development needs a MongoDB **replica set** (Atlas M0; Prisma rejects a standalone `mongod`) — `bun run db-migrate` to create the indexes. The course catalog lives only in ScottyLabs' production DB, not ours, so two setups are possible:
