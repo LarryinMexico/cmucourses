@@ -109,8 +109,8 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
 - [x] Adjust course preferences and regenerate based on changes — each pick on a candidate can be **locked** (kept on the next run) or **excluded** (never chosen), shown as removable chips above a **Regenerate** button; the panel also takes an option count (1-3) and a units range for this run only. Locks and exclusions live in the panel's component state (not saved to the profile or Redux) and are cleared when the semester changes. No new preference types were added: "course preferences" here means which sections to keep or rule out, not a saved preference profile
 
 **Finalize**
-- [x] Select a preferred schedule — "Use this schedule" fills the existing manual builder's lecture/section selections
-- [x] Save chosen schedule — reuses the existing local `userSchedules` save (see scope decision above)
+- [x] Select a preferred schedule — "Use this schedule" fills the builder's lecture/section picks and marks the card "In use". Since 2026-09-25 it changes only the courses it placed (it used to blank the rest, which vanished from the calendar), offers sections-only courses, waits for course data, and a reload no longer resets the semester
+- [x] Save chosen schedule — named schedules saved **to the account** ("My saved schedules" on /schedules: save, update, open, rename, delete; 20 per account). These are what Circles shares. The builder's working copy stays in the browser but is now per account
 - [x] Export/share schedule — the Copy link button builds `/schedules/shared?data=...` (the schedule encoded in the URL; `?courses=...` is only accepted as a fallback), and an **Export .ics** button downloads a calendar file (`buildScheduleICS` in `apps/frontend/src/app/scheduleSharing.ts`, tested)
 - [x] Plan courses across semesters (moved from V2's Academic Path) — Profile's "Future course plan" and `/requirements` show one block per semester in calendar order, with each course's units, a total, and how it sits against the profile's units range (`groupPlanBySemester`, `packages/profile/plan.ts`). Variable-unit courses are listed but not counted, and the line says so. The same course can be planned in two semesters (the picker used to hide it). **Limits:** the workload check is units only (hours per week need FCE data, unavailable without a production sign-in), and a semester's actual meeting times are checked by the schedule builder, not by the plan
 - [x] Explore alternative academic paths (moved from V2's Academic Path) — `/careers` "Alternative academic paths" (`AlternativeAcademicPaths`): up to 3 course bundles that each take a different suggested course for every skill gap. Skill-gap based; it does not consider degree requirements
@@ -144,27 +144,26 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
 > `apps/frontend/src/pages/circles.tsx`). The directory highlights courses and
 > careers/skills you share with each person (`ProfileCard` in `circles.tsx`).
 
-- [x] Schedule sharing — publish your active `userSchedules` schedule to your public profile
-  (`publishSocialSchedule`, `PATCH /user/social/schedule`)
-- [x] Social connections — follow another student's profile (`updateFollow`,
-  `PATCH /user/social/follow`)
-- [x] Interactive features: schedule reactions — emoji reactions (👍🎉🔥📚) on a followed
-  schedule (`updateScheduleReaction`, `PATCH /user/social/reaction`). **Reactions had no checks at
-  all** until 2026-09-23 (any signed-in user could react to any profile id); they now need a real
-  profile, not yourself, a published schedule, and following the owner
-- [x] Schedule comments — followers can comment on a published schedule (`controllers/comments.ts`,
-  `PATCH/DELETE /user/social/comment`, `POST /social/comments`). Anyone signed in can read; the author
-  deletes their own and the schedule's owner can delete any; unpublishing deletes the comments, republishing
-  keeps them. Newest 200 are shown, up to 500 characters each
-- [x] Direct messages — between **mutual follows** only (`controllers/messages.ts`,
-  `POST /user/messages/conversations`, `POST /user/messages/thread`, `PATCH /user/messages`). The
-  Circles page has a Messages card with unread counts and a Message button on the card of anyone who follows you back.
-  New messages arrive by **polling** (list every 15 s, an open thread every 5 s, paused in a hidden tab):
-  the backend is a plain Express app with no long-lived connections. Unfollowing stops sending; history stays readable
-- [ ] ~~Notifications~~ — **Out of scope (decision 2026-09-23).** No bell, no email; unread counts appear only in the Messages list
-- Fixed alongside: the page forgot what you had published after a reload (the directory now returns your own
-  published schedule), and the directory listed every profile even with nothing public (it now returns those with a
-  public section or a published schedule)
+- [x] Schedule sharing — **one post per student per semester** (`circlePosts`), copied from a
+  schedule saved on the account; sharing another schedule for that semester replaces the post. Each
+  post shows the schedule as a Mon–Fri week grid, the author's busy times on the same grid (what each
+  is for only if the author sets it Public in Profile › Time & format), their public profile
+  details, the courses with units, courses you share, reactions and comments (2026-09-25)
+- [x] Feed — Circles is Feed / People / Messages; the feed scrolls newest-first and loads more as you
+  go, filterable to Everyone / Following / My posts
+- [x] Social connections — follow, with the state spelled out: Follow / Following / Follow back /
+  Connected, plus "Follows you". Circles warns you when nobody can find you yet
+- [x] Reactions and comments — on a post, for followers of its author (reactions had no checks at
+  all before 2026-09-23). The author of a comment, or of the post, can delete it
+- [x] Direct messages — between mutual follows, in a Messenger-style panel (chat list, bubbles, Enter
+  to send, auto-scroll, "Sending…" / "Not sent · Retry"), polled rather than pushed. The 2026-09-25
+  rework fixed why two real accounts could not message: invisible profiles, a directory that never
+  refreshed, one-way follows labelled "Connected", Message doing nothing visible, hidden errors, and
+  caches shared between accounts in one browser
+- [ ] ~~Notifications~~ — **Out of scope (decision 2026-09-23, reaffirmed 2026-09-25).** No bell, toast
+  or email; unread counts appear only in the chat list
+- Demo data: `bun run demo-seed` (dry run first; `--yes`, `--with-real-users`, `--remove`,
+  `--migrate-old`) fills Circles with fake `demo_` students
 
 ## Known limitations (2026-09-23)
 

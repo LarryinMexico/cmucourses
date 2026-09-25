@@ -116,6 +116,10 @@ Path alias `~/*` → `apps/frontend/src/*`.
 
 Prettier: 2 spaces, double quotes, semicolons, es5 trailing commas; 120 cols from the root `.prettierrc`, but `apps/frontend/src/.prettierrc` sets 80 cols for frontend source. Many existing frontend files predate the formatter — format files you create, but don't reformat untouched lines of existing files. The frontend eslint config downgrades the `@typescript-eslint/no-unsafe-*` family, `no-explicit-any`, `no-unused-vars`, and `react-hooks/rules-of-hooks` to warnings — warnings there are pre-existing noise, but don't add new ones.
 
+### Scotty Circles (posts, feed, messages)
+
+Posts are `circlePosts` (one per author + semester + year, copied from a `savedSchedules` row by `PATCH /user/posts`), with `postReactions` / `postComments`. `POST /social/feed` pages by a cursor on (updatedAt, id), 10 at a time; `controllers/socialDirectory.ts` holds the pure view mappers (`toCirclePost`, `toPostAuthor`, `toDirectoryProfile`, cursor helpers) and `socialAccess.ts` the follow gate shared by reactions and comments. Busy times always appear on posts; labels only when `visibility.busyLabels` is PUBLIC (absent on old documents = private). The old `socialSchedules` / `scheduleReactions` / `scheduleComments` collections are unused. Frontend: `pages/circles.tsx` (tabs) + `components/circles/*`; the post grid is `WeekGrid` over `layoutWeek` (`app/weekGrid.ts`) and `meetingsForSchedule` (`app/scheduleSharing.ts`, shared with the .ics export). Every social / messages / saved-schedule query key includes the Clerk user id. Demo data: `scripts/demo/seed-circles.mjs` (`bun run demo-seed`, dry run by default). Pushing schema changes to Atlas (`bun run db-migrate` from `packages/db`) is the user's step.
+
 ### Polling and the Circles UI
 
 `app/api/messages.ts` holds the app's only polling (`refetchInterval` on the conversation list and the open thread, paused in a hidden tab): the backend is plain Express on Netlify with no long-lived connections. The Circles page composes `MessagesCard` (`components/circles/`) and a collapsible comments section under each published schedule.
