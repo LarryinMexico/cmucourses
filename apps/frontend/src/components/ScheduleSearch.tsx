@@ -273,6 +273,14 @@ const ScheduleSearch = () => {
             />
           </div>
         )}
+        {active !== null && savedSchedules[active]?.generated?.option && (
+          <div className="text-gray-500 text-xs">
+            Using Option {savedSchedules[active]?.generated?.option} from
+            Generate ·{" "}
+            {Math.round(savedSchedules[active]?.generated?.score ?? 0)}
+            /100
+          </div>
+        )}
 
         <CourseCombobox
           onSelectedItemsChange={(courseIDs) => {

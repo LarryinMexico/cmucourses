@@ -4,13 +4,17 @@ import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import { useFetchCourseInfos } from "~/app/api/course";
 import { useFetchProfile } from "~/app/api/profile";
 import {
+  selectActiveUserSchedule,
+  selectCourseSessionsInActiveSchedule,
   selectCoursesInActiveSchedule,
   selectSessionInActiveSchedule,
   userSchedulesSlice,
 } from "~/app/userSchedules";
 import {
   buildGeneratorInput,
+  candidateToCourseSessions,
   generateCandidates,
+  standaloneSectionKeys,
   MAX_POOL,
   plannedCourseIDsForSession,
   poolCourseIDs,
@@ -43,6 +47,9 @@ const GeneratePanel = () => {
   const selectedSession = useAppSelector(selectSessionInActiveSchedule);
   const scheduledKey = scheduled.join(",");
   const courseDetails = useFetchCourseInfos(scheduled);
+  const currentSessions = useAppSelector(selectCourseSessionsInActiveSchedule);
+  const generatedMeta = useAppSelector(selectActiveUserSchedule)?.generated;
+  const [appliedIndex, setAppliedIndex] = useState<number | null>(null);
   const { data: profile } = useFetchProfile();
   const saved = useAppSelector((state) => state.user.bookmarked);
   const [includeSaved, setIncludeSaved] = useState(false);
@@ -79,9 +86,16 @@ const GeneratePanel = () => {
   const poolKey = pool.ids.join(",");
   const poolDetails = useFetchCourseInfos(pool.ids);
 
+  // Every course's catalog data must be in before generating: a course whose info has not
+  // arrived would look like one with no schedule and be left out.
+  const loading =
+    courseDetails.length < scheduled.length ||
+    poolDetails.length < pool.ids.length;
+
   // Drop stale options when the semester, course list or pool changes.
   useEffect(() => {
     setCandidates(null);
+    setAppliedIndex(null);
   }, [selectedSession, scheduledKey, poolKey]);
 
   // Section names only mean something within one semester's schedule, so a new semester clears
@@ -111,6 +125,7 @@ const GeneratePanel = () => {
       }
     );
     setCandidates(generateCandidates(input));
+    setAppliedIndex(null);
   };
 
   // One lock per course: locking another pick of the same course replaces the first.
@@ -128,58 +143,39 @@ const GeneratePanel = () => {
     );
   };
 
-  const applyCandidate = (candidate: ScheduleCandidate) => {
-    dispatch(userSchedulesSlice.actions.setActiveScheduleCourses(scheduled));
-    // A pool course the generator chose has to join the schedule first: that is what creates its
-    // lecture/section entry and its colour, which the updates below only fill in.
+  const applyCandidate = (candidate: ScheduleCandidate, index: number) => {
+    // Pool courses the candidate chose are not in the schedule yet; give them an entry to fill.
+    const base = { ...currentSessions };
     for (const pick of candidate.picks) {
-      if (scheduled.includes(pick.courseID)) continue;
-      dispatch(
-        userSchedulesSlice.actions.addCourseToActiveSchedule(pick.courseID)
-      );
+      if (!base[pick.courseID])
+        base[pick.courseID] = { Lecture: "", Section: "", Color: "" };
     }
-    const picked = new Set(candidate.picks.map((pick) => pick.courseID));
-    // Clear leftover lecture/section picks from a previous semester for courses not in this result.
-    for (const courseID of scheduled) {
-      if (picked.has(courseID)) continue;
-      dispatch(
-        userSchedulesSlice.actions.updateActiveScheduleCourseSession({
-          courseID,
-          sessionType: "Lecture",
-          session: "",
-        })
-      );
-      dispatch(
-        userSchedulesSlice.actions.updateActiveScheduleCourseSession({
-          courseID,
-          sessionType: "Section",
-          session: "",
-        })
-      );
-    }
-    for (const pick of candidate.picks) {
-      dispatch(
-        userSchedulesSlice.actions.updateActiveScheduleCourseSession({
-          courseID: pick.courseID,
-          sessionType: "Lecture",
-          session: pick.lecture,
-        })
-      );
-      dispatch(
-        userSchedulesSlice.actions.updateActiveScheduleCourseSession({
-          courseID: pick.courseID,
-          sessionType: "Section",
-          session: pick.section || "",
-        })
-      );
-    }
+    const courseSessions = candidateToCourseSessions(
+      base,
+      candidate.picks,
+      standaloneSectionKeys([...courseDetails, ...poolDetails], selectedSession)
+    );
+    // Only the placed courses are sent; everything else keeps the student's own choice.
+    const placed = Object.fromEntries(
+      candidate.picks.map((pick) => [
+        pick.courseID,
+        courseSessions[pick.courseID]!,
+      ])
+    );
     dispatch(
-      userSchedulesSlice.actions.setActiveScheduleGeneratedMeta({
-        score: candidate.totalScore,
-        reasons: candidate.reasons,
+      userSchedulesSlice.actions.applyGeneratedSchedule({
+        courseSessions: placed,
+        addCourses: candidate.picks
+          .map((pick) => pick.courseID)
+          .filter((id) => !scheduled.includes(id)),
+        generated: {
+          option: index + 1,
+          score: candidate.totalScore,
+          reasons: candidate.reasons,
+        },
       })
     );
-    setCandidates(null);
+    setAppliedIndex(index);
   };
 
   return (
@@ -282,8 +278,13 @@ const GeneratePanel = () => {
             type="button"
             className={`${PRIMARY_BUTTON_CLASS} w-full`}
             onClick={generate}
+            disabled={loading}
           >
-            {candidates ? "Regenerate" : "Generate Schedules"}
+            {loading
+              ? "Loading course data…"
+              : candidates
+                ? "Regenerate"
+                : "Generate Schedules"}
           </button>
         </>
       )}
@@ -304,7 +305,14 @@ const GeneratePanel = () => {
                 locks={locks}
                 onToggleLock={toggleLock}
                 onExclude={exclude}
-                onUse={() => applyCandidate(candidate)}
+                inUse={
+                  appliedIndex === index && generatedMeta?.option === index + 1
+                }
+                unplaced={scheduled.filter(
+                  (id) => !candidate.picks.some((pick) => pick.courseID === id)
+                )}
+                semester={selectedSession}
+                onUse={() => applyCandidate(candidate, index)}
               />
             ))
           )}

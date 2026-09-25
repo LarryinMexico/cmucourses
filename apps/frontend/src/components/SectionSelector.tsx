@@ -51,16 +51,24 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
     );
   });
 
+  // Every course's data must be in before deciding the semester is gone: on a reload the course
+  // infos arrive one by one, and resetting early wiped the student's semester (and calendar).
+  const allLoaded = courseDetails.length === courseIDs.length;
+
   useEffect(() => {
     // Check if selected session is in the list of semesters
-    if (selectedSession.length > 0 && !semesters.includes(selectedSession)) {
+    if (
+      allLoaded &&
+      selectedSession.length > 0 &&
+      !semesters.includes(selectedSession)
+    ) {
       dispatch(
         userSchedulesSlice.actions.updateActiveScheduleSemester(
           stringToSession("")
         )
       );
     }
-  }, [selectedSession, semesters, dispatch]);
+  }, [allLoaded, selectedSession, semesters, dispatch]);
 
   return (
     <div className="pt-4">

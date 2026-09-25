@@ -3,6 +3,8 @@ import type { Course } from "./types";
 import {
   MAX_POOL,
   buildGeneratorInput,
+  candidateToCourseSessions,
+  standaloneSectionKeys,
   plannedCourseIDsForSession,
   poolCourseIDs,
 } from "./scheduleGenerator";
@@ -199,5 +201,155 @@ describe("buildGeneratorInput with a pool", () => {
     expect(input.optionalCourses).toEqual([
       { courseID: "99-999", units: 0, lectures: [] },
     ]);
+  });
+});
+
+describe("candidateToCourseSessions", () => {
+  const current = {
+    "15-213": { Lecture: "Lec 1", Section: "A", Color: "c1" },
+    "95-703": { Lecture: "Lec 2", Section: "", Color: "c2" },
+  };
+  const pick = (courseID: string, lecture: string, section: string | null) => ({
+    courseID,
+    lecture,
+    section,
+    times: [],
+  });
+
+  it("sets the picked lecture and section", () => {
+    const next = candidateToCourseSessions(current, [
+      pick("15-213", "Lec 2", "D"),
+    ]);
+    expect(next["15-213"]).toEqual({
+      Lecture: "Lec 2",
+      Section: "D",
+      Color: "c1",
+    });
+  });
+
+  it("leaves a course the candidate could not place exactly as it was", () => {
+    const next = candidateToCourseSessions(current, [
+      pick("15-213", "Lec 2", "D"),
+    ]);
+    expect(next["95-703"]).toEqual(current["95-703"]);
+  });
+
+  it("a pick without a section clears only the section", () => {
+    const next = candidateToCourseSessions(current, [
+      pick("15-213", "Lec 3", null),
+    ]);
+    expect(next["15-213"]).toEqual({
+      Lecture: "Lec 3",
+      Section: "",
+      Color: "c1",
+    });
+  });
+
+  it("does not change the input", () => {
+    const copy = JSON.parse(JSON.stringify(current));
+    candidateToCourseSessions(current, [pick("15-213", "Lec 2", "D")]);
+    expect(current).toEqual(copy);
+  });
+});
+
+describe("buildGeneratorInput for a schedule with sections but no lectures", () => {
+  const sectionsOnly = {
+    courseID: "95-703",
+    units: "12",
+    schedules: [
+      {
+        courseID: "95-703",
+        year: "2026",
+        semester: "fall",
+        lectures: [],
+        sections: [
+          {
+            name: "A",
+            lecture: "",
+            instructors: [],
+            location: "Pittsburgh",
+            times: [{ days: [1], begin: "10:00AM", end: "10:50AM" }],
+          },
+          {
+            name: "B",
+            lecture: "",
+            instructors: [],
+            location: "Pittsburgh",
+            times: [{ days: [2], begin: "10:00AM", end: "10:50AM" }],
+          },
+        ],
+      },
+    ],
+  } as unknown as Course;
+
+  it("offers each section as an option instead of nothing", () => {
+    const input = buildGeneratorInput(
+      ["95-703"],
+      [sectionsOnly],
+      "Fall 2026",
+      profile
+    );
+    const options = input.courses[0]!.lectures;
+    expect(options.map((l) => l.name)).toEqual(["A", "B"]);
+    expect(options[0]!.times).toHaveLength(1);
+  });
+
+  it("keeps sections whose lecture name matches nothing as their own options", () => {
+    const orphan = JSON.parse(JSON.stringify(sectionsOnly));
+    orphan.schedules[0].lectures = [
+      {
+        name: "Lec 1",
+        instructors: [],
+        location: "Pittsburgh",
+        times: [{ days: [3], begin: "09:00AM", end: "09:50AM" }],
+      },
+    ];
+    orphan.schedules[0].sections[0].lecture = "Lec 1";
+    orphan.schedules[0].sections[1].lecture = "Lec 9";
+    const input = buildGeneratorInput(
+      ["95-703"],
+      [orphan],
+      "Fall 2026",
+      profile
+    );
+    const names = input.courses[0]!.lectures.map((l) => l.name);
+    expect(names).toEqual(["Lec 1", "B"]);
+    expect(input.courses[0]!.lectures[0]!.sections.map((s) => s.name)).toEqual([
+      "A",
+    ]);
+  });
+});
+
+describe("standalone sections round-trip", () => {
+  const course = {
+    courseID: "95-703",
+    units: "12",
+    schedules: [
+      {
+        courseID: "95-703",
+        year: "2026",
+        semester: "fall",
+        lectures: [],
+        sections: [
+          { name: "D", lecture: "", instructors: [], location: "", times: [] },
+        ],
+      },
+    ],
+  } as unknown as Course;
+
+  it("finds sections that have no lecture of their own", () => {
+    expect([...standaloneSectionKeys([course], "Fall 2026")]).toEqual([
+      "95-703:D",
+    ]);
+    expect([...standaloneSectionKeys([course], "Spring 2026")]).toEqual([]);
+  });
+
+  it("a standalone section the generator picked is written back as the Section", () => {
+    const next = candidateToCourseSessions(
+      { "95-703": { Lecture: "", Section: "", Color: "c" } },
+      [{ courseID: "95-703", lecture: "D", section: null }],
+      standaloneSectionKeys([course], "Fall 2026")
+    );
+    expect(next["95-703"]).toEqual({ Lecture: "", Section: "D", Color: "c" });
   });
 });

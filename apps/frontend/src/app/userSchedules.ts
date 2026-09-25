@@ -32,7 +32,14 @@ export interface UserSchedule {
   numColors: number;
   hoverSession?: HoverSession;
   /** Set when this schedule came from the Generate panel, for a "why" badge. Absent otherwise. */
-  generated?: { score: number; reasons: string[] };
+  generated?: GeneratedMeta;
+}
+
+export interface GeneratedMeta {
+  /** 1-based number of the candidate card ("Option 2"); absent in schedules saved before this. */
+  option?: number;
+  score: number;
+  reasons: string[];
 }
 
 export interface UserSchedulesState {
@@ -108,6 +115,7 @@ export const userSchedulesSlice = createSlice({
 
       schedule.courses = addToSet(schedule.courses, action.payload);
       schedule.selected = addToSet(schedule.selected, action.payload);
+      schedule.generated = undefined;
       schedule.courseSessions[action.payload] = {
         Lecture: "",
         Section: "",
@@ -120,6 +128,7 @@ export const userSchedulesSlice = createSlice({
       if (!schedule) return;
 
       schedule.courses = removeFromSet(schedule.courses, action.payload);
+      schedule.generated = undefined;
       schedule.selected = removeFromSet(schedule.selected, action.payload);
       delete schedule.courseSessions[action.payload];
     },
@@ -200,6 +209,8 @@ export const userSchedulesSlice = createSlice({
       const courseSession = schedule.courseSessions[action.payload.courseID];
       if (!courseSession) return;
       courseSession[action.payload.sessionType] = action.payload.session;
+      // A pick changed by hand: the schedule is no longer the generated option.
+      schedule.generated = undefined;
     },
     setHoverSession: (
       state,
@@ -216,11 +227,52 @@ export const userSchedulesSlice = createSlice({
     },
     setActiveScheduleGeneratedMeta: (
       state,
-      action: PayloadAction<{ score: number; reasons: string[] }>
+      action: PayloadAction<GeneratedMeta>
     ) => {
       const schedule = getActiveSchedule(state);
       if (!schedule) return;
       schedule.generated = action.payload;
+    },
+    /**
+     * Applies a Generate candidate in one step: adds the pool courses it chose, replaces the
+     * lecture/section picks it computed (see candidateToCourseSessions) and records which option
+     * it was. Courses it could not place are left untouched.
+     */
+    applyGeneratedSchedule: (
+      state,
+      action: PayloadAction<{
+        courseSessions: CourseSessions;
+        addCourses: string[];
+        generated: GeneratedMeta;
+      }>
+    ) => {
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      for (const courseID of action.payload.addCourses) {
+        if (schedule.courses.includes(courseID)) continue;
+        schedule.courses = addToSet(schedule.courses, courseID);
+        schedule.selected = addToSet(schedule.selected, courseID);
+        schedule.courseSessions[courseID] = {
+          Lecture: "",
+          Section: "",
+          Color: getCalendarColor(schedule.numColors),
+        };
+        schedule.numColors += 1;
+      }
+      for (const [courseID, picks] of Object.entries(
+        action.payload.courseSessions
+      )) {
+        const existing = schedule.courseSessions[courseID];
+        schedule.courseSessions[courseID] = existing
+          ? {
+              ...existing,
+              Lecture: picks.Lecture ?? "",
+              Section: picks.Section ?? "",
+            }
+          : picks;
+      }
+      schedule.hoverSession = undefined;
+      schedule.generated = action.payload.generated;
     },
   },
 });

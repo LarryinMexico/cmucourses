@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
   LockClosedIcon,
   LockOpenIcon,
   NoSymbolIcon,
@@ -34,6 +36,9 @@ const CandidateCard = ({
   onToggleLock,
   onExclude,
   onUse,
+  inUse,
+  unplaced,
+  semester,
 }: {
   candidate: ScheduleCandidate;
   index: number;
@@ -41,6 +46,11 @@ const CandidateCard = ({
   onToggleLock: (ref: SectionRef) => void;
   onExclude: (ref: SectionRef) => void;
   onUse: () => void;
+  /** This option is what the schedule currently holds. */
+  inUse: boolean;
+  /** Courses in the schedule that this option could not place; they keep their own picks. */
+  unplaced: string[];
+  semester: string;
 }) => {
   const [showAll, setShowAll] = useState(false);
   const { scores } = candidate;
@@ -140,12 +150,31 @@ const CandidateCard = ({
           )}
         </>
       )}
+      {unplaced.length > 0 && (
+        <div className="mt-3 flex gap-2 rounded bg-yellow-50 p-2 text-yellow-800 text-xs">
+          <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+          <span>
+            Can&apos;t place {unplaced.join(", ")}
+            {semester ? ` in ${semester}` : ""}. Using this option leaves{" "}
+            {unplaced.length === 1 ? "it" : "them"} as you set{" "}
+            {unplaced.length === 1 ? "it" : "them"}.
+          </span>
+        </div>
+      )}
       <button
         type="button"
         onClick={onUse}
-        className={`${PRIMARY_BUTTON_CLASS} mt-3 w-full`}
+        disabled={inUse}
+        className={`${PRIMARY_BUTTON_CLASS} mt-3 w-full items-center gap-2`}
       >
-        Use this schedule
+        {inUse ? (
+          <>
+            <CheckCircleIcon className="h-5 w-5" />
+            In use
+          </>
+        ) : (
+          "Use this schedule"
+        )}
       </button>
     </Card>
   );
