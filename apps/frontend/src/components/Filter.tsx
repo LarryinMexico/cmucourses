@@ -14,8 +14,9 @@ import GoalsFilter from "./filters/GoalsFilter";
 import ClassTimesFilter from "./filters/ClassTimesFilter";
 import AdvancedScheduleFilter from "./filters/AdvancedScheduleFilter";
 
+// Real buttons, not text links: these were too small to notice (user feedback, 2026-09-25).
 const LINK_BUTTON_CLASS =
-  "text-gray-500 text-xs hover:text-blue-500 hover:underline disabled:cursor-default disabled:opacity-50 disabled:hover:no-underline";
+  "rounded border border-gray-200 px-3 py-1.5 text-gray-700 text-sm hover:bg-gray-50 disabled:cursor-default disabled:opacity-50";
 
 /** Keep the current filters as the default for this account, or bring the kept ones back. */
 const DefaultFilterControls = () => {
@@ -30,7 +31,7 @@ const DefaultFilterControls = () => {
   const saved = profile?.savedFilters ?? null;
 
   return (
-    <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1">
+    <div className="mb-4 flex flex-wrap gap-2">
       <button
         type="button"
         className={LINK_BUTTON_CLASS}
