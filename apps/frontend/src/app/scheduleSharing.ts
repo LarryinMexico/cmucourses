@@ -105,28 +105,40 @@ const escapeICS = (value: string) =>
     .replaceAll(",", "\\,")
     .replaceAll("\n", "\\n");
 
-interface ExportMeeting {
+export interface ScheduleMeeting {
   courseID: string;
   label: string;
   time: Time;
 }
 
-const exportMeetings = (
-  schedule: UserSchedule,
+/**
+ * Every meeting of the picked lecture and section of each course, in one semester (`semester` as
+ * sessionToString gives it). Shared by the .ics export and the Circles week grid. A lecture's
+ * times that the linked section already covers are dropped, as on the calendar.
+ */
+export const meetingsForSchedule = (
+  semester: string,
+  selections: {
+    [courseID: string]: { [kind: string]: string | undefined } | undefined;
+  },
   courses: Course[]
-): ExportMeeting[] => {
-  const semester = sessionToString(schedule.session);
-  return courses.flatMap((course) => {
+): ScheduleMeeting[] =>
+  courses.flatMap((course) => {
     const offering = course.schedules?.find(
       (candidate) => sessionToString(candidate) === semester
     );
-    const selection = schedule.courseSessions[course.courseID];
-    const lecture = offering?.lectures.find(
-      (candidate) => candidate.name === selection?.Lecture
-    );
-    const section = offering?.sections.find(
-      (candidate) => candidate.name === selection?.Section
-    );
+    const selection = selections[course.courseID];
+    if (!offering || !selection) return [];
+    const lecture = selection.Lecture
+      ? offering.lectures.find(
+          (candidate) => candidate.name === selection.Lecture
+        )
+      : undefined;
+    const section = selection.Section
+      ? offering.sections.find(
+          (candidate) => candidate.name === selection.Section
+        )
+      : undefined;
     const lectureTimes = lecture
       ? getVisibleLectureTimes(
           lecture.times,
@@ -146,7 +158,13 @@ const exportMeetings = (
       })),
     ];
   });
-};
+
+const exportMeetings = (schedule: UserSchedule, courses: Course[]) =>
+  meetingsForSchedule(
+    sessionToString(schedule.session),
+    schedule.courseSessions,
+    courses
+  );
 
 export const buildScheduleICS = (
   schedule: UserSchedule,

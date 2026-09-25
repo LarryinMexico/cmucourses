@@ -2,14 +2,17 @@ import { describe, expect, test } from "bun:test";
 import {
   COMMENT_LIMITS,
   commentDeleteSchema,
-  commentInputSchema,
   MESSAGE_LIMITS,
   followInputSchema,
   profileIDSchema,
   publishedScheduleSchema,
-  reactionInputSchema,
   sendMessageSchema,
   threadQuerySchema,
+  deletePostInputSchema,
+  feedQuerySchema,
+  postCommentInputSchema,
+  postReactionInputSchema,
+  sharePostInputSchema,
 } from "./social";
 
 describe("social schemas", () => {
@@ -23,8 +26,7 @@ describe("social schemas", () => {
     expect(result.courses[0]?.courseID).toBe("15-213");
   });
 
-  test("rejects invalid reactions and follow targets", () => {
-    expect(reactionInputSchema.safeParse({ profileID: "p", reaction: "nope" }).success).toBe(false);
+  test("rejects an invalid follow target", () => {
     expect(followInputSchema.safeParse({ profileID: "", follow: true }).success).toBe(false);
   });
 });
@@ -38,38 +40,9 @@ describe("profileIDSchema", () => {
     }
   });
 
-  test("the follow and reaction inputs use it and report the same message", () => {
+  test("the follow input uses it and reports its message", () => {
     const followed = followInputSchema.safeParse({ profileID: "nope", follow: true });
-    const reacted = reactionInputSchema.safeParse({ profileID: "nope", reaction: null });
-    expect(followed.success || reacted.success).toBe(false);
     expect(!followed.success && followed.error.issues[0]?.message).toBe("Invalid profile ID");
-    expect(!reacted.success && reacted.error.issues[0]?.message).toBe("Invalid profile ID");
-  });
-});
-
-describe("comment schemas", () => {
-  const profileID = "64b7f0c2a1d3e4f5a6b7c8d9";
-
-  test("trims the body and accepts up to the limit", () => {
-    expect(commentInputSchema.parse({ profileID, body: "  nice plan  " }).body).toBe("nice plan");
-    expect(commentInputSchema.safeParse({ profileID, body: "x".repeat(COMMENT_LIMITS.body) }).success).toBe(true);
-  });
-
-  test("rejects an empty, whitespace-only or too long body", () => {
-    for (const body of ["", "   \n ", "x".repeat(COMMENT_LIMITS.body + 1)]) {
-      expect(commentInputSchema.safeParse({ profileID, body }).success).toBe(false);
-    }
-  });
-
-  test("needs a valid profile id and rejects unknown keys", () => {
-    expect(commentInputSchema.safeParse({ profileID: "nope", body: "hi" }).success).toBe(false);
-    expect(commentInputSchema.safeParse({ profileID, body: "hi", authorUserId: "user_x" }).success).toBe(false);
-  });
-
-  test("deleting takes a 24-character comment id", () => {
-    expect(commentDeleteSchema.safeParse({ commentID: profileID }).success).toBe(true);
-    const bad = commentDeleteSchema.safeParse({ commentID: "12" });
-    expect(!bad.success && bad.error.issues[0]?.message).toBe("Invalid comment ID");
   });
 });
 
@@ -91,5 +64,39 @@ describe("message schemas", () => {
   test("a thread is opened by profile id", () => {
     expect(threadQuerySchema.safeParse({ profileID }).success).toBe(true);
     expect(threadQuerySchema.safeParse({ profileID: "nope" }).success).toBe(false);
+  });
+});
+
+describe("post schemas", () => {
+  const id = "64b7f0c2a1d3e4f5a6b7c8d9";
+
+  test("sharing names a saved schedule", () => {
+    expect(sharePostInputSchema.safeParse({ savedScheduleId: id }).success).toBe(true);
+    expect(sharePostInputSchema.safeParse({ savedScheduleId: "x" }).success).toBe(false);
+    expect(sharePostInputSchema.safeParse({ savedScheduleId: id, authorUserId: "user_x" }).success).toBe(false);
+  });
+
+  test("deleting and reacting name a post", () => {
+    expect(deletePostInputSchema.safeParse({ postId: id }).success).toBe(true);
+    expect(postReactionInputSchema.safeParse({ postId: id, reaction: "🔥" }).success).toBe(true);
+    expect(postReactionInputSchema.safeParse({ postId: id, reaction: null }).success).toBe(true);
+    expect(postReactionInputSchema.safeParse({ postId: id, reaction: "nope" }).success).toBe(false);
+  });
+
+  test("a comment is trimmed and limited like schedule comments were", () => {
+    expect(postCommentInputSchema.parse({ postId: id, body: "  hi  " }).body).toBe("hi");
+    expect(postCommentInputSchema.safeParse({ postId: id, body: " " }).success).toBe(false);
+    expect(postCommentInputSchema.safeParse({ postId: id, body: "x".repeat(COMMENT_LIMITS.body + 1) }).success).toBe(
+      false
+    );
+  });
+
+  test("the feed takes an optional cursor and a filter that defaults to everyone", () => {
+    expect(feedQuerySchema.parse({})).toEqual({ filter: "all" });
+    expect(feedQuerySchema.parse({ filter: "following", cursor: `2026-09-01T00:00:00.000Z_${id}` }).filter).toBe(
+      "following"
+    );
+    expect(feedQuerySchema.safeParse({ cursor: "garbage" }).success).toBe(false);
+    expect(feedQuerySchema.safeParse({ filter: "friends" }).success).toBe(false);
   });
 });

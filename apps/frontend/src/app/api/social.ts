@@ -1,11 +1,16 @@
 import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  type PublishedSchedule,
-  type ScheduleComment,
-  type SocialDirectory,
-  type SocialReaction,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type {
+  FeedPage,
+  ScheduleComment,
+  SocialDirectory,
+  SocialReaction,
 } from "@cmucourses/profile";
 import { showToast } from "~/components/Toast";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
@@ -15,98 +20,147 @@ export const backendUrl = () =>
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   "";
 
+// Every key carries the Clerk user id, so two accounts in one browser never share cached data.
 const DIRECTORY_KEY = "socialDirectory";
+const FEED_KEY = "circleFeed";
+const COMMENTS_KEY = "postComments";
 
-const COMMENTS_KEY = "scheduleComments";
+export type FeedFilter = "all" | "following" | "mine";
 
-const EMPTY_DIRECTORY: SocialDirectory = {
-  me: { profileID: null, publishedSchedule: null },
-  people: [],
+/** The server's own message ("Follow this student to comment") beats a generic failure toast. */
+export const serverMessage = (error: unknown, fallback: string) => {
+  const data = axios.isAxiosError(error)
+    ? (error.response?.data as { error?: unknown } | undefined)
+    : undefined;
+  return typeof data?.error === "string" ? data.error : fallback;
 };
 
+const toastError = (fallback: string) => (error: unknown) =>
+  showToast({
+    message: serverMessage(error, fallback),
+    icon: ExclamationTriangleIcon,
+  });
+
+const post = async <T>(
+  getToken: () => Promise<string | null>,
+  path: string,
+  body: object = {}
+): Promise<T> => {
+  const token = await getToken();
+  if (!token) throw new Error("Not signed in");
+  const response = await axios.post<T>(`${backendUrl()}${path}`, {
+    token,
+    ...body,
+  });
+  return response.data;
+};
+
+/**
+ * People you can find in Circles, plus your own state (profile id, posts, whether others can see
+ * you). Polled while Circles is open so a follow from the other side shows up without a reload.
+ */
 export const useSocialDirectory = () => {
-  const { isSignedIn, getToken } = useAuth();
+  const { isSignedIn, userId, getToken } = useAuth();
   return useQuery({
-    queryKey: [DIRECTORY_KEY],
-    queryFn: async (): Promise<SocialDirectory> => {
-      const token = await getToken();
-      if (!token) return EMPTY_DIRECTORY;
-      const response = await axios.post<SocialDirectory>(
-        `${backendUrl()}/social/directory`,
-        { token }
-      );
-      return response.data;
-    },
+    queryKey: [DIRECTORY_KEY, userId],
+    queryFn: () => post<SocialDirectory>(getToken, "/social/directory"),
+    enabled: !!isSignedIn,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
+};
+
+/** The Circles feed, newest first, loaded a page at a time as you scroll. */
+export const useFeed = (filter: FeedFilter) => {
+  const { isSignedIn, userId, getToken } = useAuth();
+  return useInfiniteQuery({
+    queryKey: [FEED_KEY, userId, filter],
+    queryFn: ({ pageParam }) =>
+      post<FeedPage>(getToken, "/social/feed", {
+        filter,
+        ...(pageParam ? { cursor: pageParam } : {}),
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled: !!isSignedIn,
   });
 };
 
-const useSocialMutation = <T extends object>(path: string) => {
-  const { getToken } = useAuth();
+/** Refreshes everything a social action can change: the feed pages and the directory. */
+const useRefreshSocial = () => {
+  const { userId } = useAuth();
   const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: [FEED_KEY, userId] });
+    void queryClient.invalidateQueries({ queryKey: [DIRECTORY_KEY, userId] });
+  };
+};
+
+const useSocialMutation = <T extends object>(
+  method: "patch" | "delete",
+  path: string,
+  fallback: string
+) => {
+  const { getToken } = useAuth();
+  const refresh = useRefreshSocial();
   return useMutation({
     mutationFn: async (input: T) => {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      await axios.patch(`${backendUrl()}${path}`, { token, ...input });
+      const url = `${backendUrl()}${path}`;
+      if (method === "delete")
+        await axios.delete(url, { data: { token, ...input } });
+      else await axios.patch(url, { token, ...input });
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: [DIRECTORY_KEY] });
-    },
-    onError: () =>
-      showToast({
-        message: "Couldn't update Scotty Circles. Please try again.",
-        icon: ExclamationTriangleIcon,
-      }),
+    onSuccess: refresh,
+    onError: toastError(fallback),
   });
 };
 
-export const usePublishSocialSchedule = () =>
-  useSocialMutation<{ schedule: PublishedSchedule | null }>(
-    "/user/social/schedule"
-  );
-
 export const useToggleFollow = () =>
   useSocialMutation<{ profileID: string; follow: boolean }>(
-    "/user/social/follow"
+    "patch",
+    "/user/social/follow",
+    "Couldn't update who you follow. Please try again."
   );
 
-export const useReactToSchedule = () =>
-  useSocialMutation<{
-    profileID: string;
-    reaction: SocialReaction | null;
-  }>("/user/social/reaction");
+export const useSharePost = () =>
+  useSocialMutation<{ savedScheduleId: string }>(
+    "patch",
+    "/user/posts",
+    "Couldn't share the schedule. Please try again."
+  );
 
-/** The server's own message ("Follow this student to comment") beats a generic failure toast. */
-const commentError = (error: unknown) =>
-  axios.isAxiosError(error) &&
-  typeof (error.response?.data as { error?: unknown } | undefined)?.error ===
-    "string"
-    ? (error.response?.data as { error: string }).error
-    : "Couldn't update comments. Please try again.";
+export const useDeletePost = () =>
+  useSocialMutation<{ postId: string }>(
+    "delete",
+    "/user/posts",
+    "Couldn't delete the post. Please try again."
+  );
 
-export const useScheduleComments = (profileID: string, enabled: boolean) => {
-  const { isSignedIn, getToken } = useAuth();
+export const useReactToPost = () =>
+  useSocialMutation<{ postId: string; reaction: SocialReaction | null }>(
+    "patch",
+    "/user/posts/reaction",
+    "Couldn't react. Please try again."
+  );
+
+export const usePostComments = (postId: string, enabled: boolean) => {
+  const { isSignedIn, userId, getToken } = useAuth();
   return useQuery({
-    queryKey: [COMMENTS_KEY, profileID],
-    queryFn: async (): Promise<ScheduleComment[]> => {
-      const token = await getToken();
-      if (!token) return [];
-      const response = await axios.post<ScheduleComment[]>(
-        `${backendUrl()}/social/comments`,
-        { token, profileID }
-      );
-      return response.data;
-    },
+    queryKey: [COMMENTS_KEY, userId, postId],
+    queryFn: () =>
+      post<ScheduleComment[]>(getToken, "/social/posts/comments", { postId }),
     enabled: !!isSignedIn && enabled,
   });
 };
 
-const useCommentMutation = <T extends { profileID: string }>(
+const useCommentMutation = <T extends { postId: string }>(
   send: (url: string, token: string, input: T) => Promise<unknown>
 ) => {
-  const { getToken } = useAuth();
+  const { userId, getToken } = useAuth();
   const queryClient = useQueryClient();
+  const refresh = useRefreshSocial();
   return useMutation({
     mutationFn: async (input: T) => {
       const token = await getToken();
@@ -115,27 +169,22 @@ const useCommentMutation = <T extends { profileID: string }>(
     },
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({
-        queryKey: [COMMENTS_KEY, input.profileID],
+        queryKey: [COMMENTS_KEY, userId, input.postId],
       });
+      refresh(); // comment counts
     },
-    onError: (error) =>
-      showToast({
-        message: commentError(error),
-        icon: ExclamationTriangleIcon,
-      }),
+    onError: toastError("Couldn't update comments. Please try again."),
   });
 };
 
 export const useAddComment = () =>
-  useCommentMutation<{ profileID: string; body: string }>((url, token, input) =>
-    axios.patch(`${url}/user/social/comment`, { token, ...input })
+  useCommentMutation<{ postId: string; body: string }>((url, token, input) =>
+    axios.patch(`${url}/user/posts/comment`, { token, ...input })
   );
 
-/** `profileID` is only used to know which comment list to refresh. */
+/** `postId` is only used to know which comment list to refresh. */
 export const useDeleteComment = () =>
-  useCommentMutation<{ profileID: string; commentID: string }>(
+  useCommentMutation<{ postId: string; commentID: string }>(
     (url, token, { commentID }) =>
-      axios.delete(`${url}/user/social/comment`, {
-        data: { token, commentID },
-      })
+      axios.delete(`${url}/user/posts/comment`, { data: { token, commentID } })
   );

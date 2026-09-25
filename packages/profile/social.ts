@@ -28,13 +28,6 @@ export const profileIDSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid profi
 
 export const COMMENT_LIMITS = { body: 500 } as const;
 
-export const commentInputSchema = z
-  .object({
-    profileID: profileIDSchema,
-    body: z.string().trim().min(1, "Write a comment first").max(COMMENT_LIMITS.body, "Comment is too long"),
-  })
-  .strict();
-
 export const commentDeleteSchema = z
   .object({ commentID: z.string().regex(/^[a-f\d]{24}$/i, "Invalid comment ID") })
   .strict();
@@ -50,19 +43,46 @@ export const sendMessageSchema = z
 
 export const threadQuerySchema = z.object({ profileID: profileIDSchema }).strict();
 
-export const publishScheduleInputSchema = z.object({ schedule: publishedScheduleSchema.nullable() }).strict();
+const postIDSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid post ID");
+
+/** Share a saved schedule: it becomes (or replaces) your post for that semester. */
+export const sharePostInputSchema = z
+  .object({ savedScheduleId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid schedule ID") })
+  .strict();
+
+export const deletePostInputSchema = z.object({ postId: postIDSchema }).strict();
+
+export const postReactionInputSchema = z
+  .object({ postId: postIDSchema, reaction: z.enum(SOCIAL_REACTIONS).nullable() })
+  .strict();
+
+export const postCommentInputSchema = z
+  .object({
+    postId: postIDSchema,
+    body: z.string().trim().min(1, "Write a comment first").max(COMMENT_LIMITS.body, "Comment is too long"),
+  })
+  .strict();
+
+export const postCommentsQuerySchema = z.object({ postId: postIDSchema }).strict();
+
+export const FEED_FILTERS = ["all", "following", "mine"] as const;
+export const FEED_PAGE_SIZE = 10;
+
+/** A feed page is asked for by the last post seen: `<updatedAt ISO>_<post id>`. */
+export const feedQuerySchema = z
+  .object({
+    cursor: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z_[a-f\d]{24}$/i, "Invalid cursor")
+      .optional(),
+    filter: z.enum(FEED_FILTERS).default("all"),
+  })
+  .strict();
 
 export const followInputSchema = z
   .object({
     profileID: profileIDSchema,
     follow: z.boolean(),
-  })
-  .strict();
-
-export const reactionInputSchema = z
-  .object({
-    profileID: profileIDSchema,
-    reaction: z.enum(SOCIAL_REACTIONS).nullable(),
   })
   .strict();
 
@@ -78,20 +98,22 @@ export interface SocialDirectoryProfile {
   careers: string[];
   skills: string[];
   currentCourseIDs: string[];
-  plannedSchedule: PublishedSchedule | null;
+  /** Courses across this person's posts, for "courses you share". */
+  postedCourseIDs: string[];
+  postCount: number;
   /** You follow them. Reacting, commenting and messaging all start from this. */
   following: boolean;
   /** They follow you. With `following` this makes a mutual follow, which is what messaging needs. */
   followsMe: boolean;
-  myReaction: SocialReaction | null;
-  reactions: Partial<Record<SocialReaction, number>>;
 }
 
 /** The caller's own social state, so the page can show what is already published after a reload. */
 export interface SocialMe {
-  /** Null until the caller has saved a profile. */
+  /** Null until the caller has saved a profile (sharing a post creates one). */
   profileID: string | null;
-  publishedSchedule: PublishedSchedule | null;
+  /** Whether anyone else can find you: a public profile section, or at least one post. */
+  visible: boolean;
+  posts: MyPostSummary[];
 }
 
 export interface SocialDirectory {
@@ -126,4 +148,56 @@ export interface ConversationSummary {
   unreadCount: number;
   /** You follow each other right now. History stays readable after an unfollow, but sending stops. */
   canSend: boolean;
+}
+
+/** A busy time as others see it: always when, and why only if the author allows it. */
+export interface PostBusyBlock {
+  day: number;
+  begin: number;
+  end: number;
+  label: string | null;
+}
+
+/** The author of a post, with each profile section already gated by its visibility. */
+export interface PostAuthor {
+  profileID: string;
+  displayName: string;
+  bio: string | null;
+  academicSummary: string | null;
+  careers: string[];
+  skills: string[];
+  currentCourseIDs: string[];
+}
+
+/** One student's schedule for one semester, as shown in the Circles feed. */
+export interface CirclePost {
+  postID: string;
+  author: PostAuthor;
+  busyBlocks: PostBusyBlock[];
+  name: string;
+  semester: PublishedSchedule["semester"];
+  year: string;
+  session: "summer one" | "summer two" | "summer all" | null;
+  courses: PublishedSchedule["courses"];
+  postedAt: string;
+  updatedAt: string;
+  isMine: boolean;
+  following: boolean;
+  followsMe: boolean;
+  myReaction: SocialReaction | null;
+  reactions: Partial<Record<SocialReaction, number>>;
+  commentCount: number;
+}
+
+export interface FeedPage {
+  posts: CirclePost[];
+  nextCursor: string | null;
+}
+
+/** Your own posts, one per semester, for the share card. */
+export interface MyPostSummary {
+  postID: string;
+  name: string;
+  semester: PublishedSchedule["semester"];
+  year: string;
 }

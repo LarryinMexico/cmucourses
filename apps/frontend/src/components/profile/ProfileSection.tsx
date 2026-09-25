@@ -26,6 +26,9 @@ export function useDraft<T>(saved: T) {
   return { draft, setDraft, dirty: !isEqual(draft, saved) };
 }
 
+/** A profile section, or the setting for whether Circles posts show what busy times are for. */
+type ToggleableVisibility = ShareableSection | "busyLabels";
+
 const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
   { value: "PRIVATE", label: "Private" },
   { value: "PUBLIC", label: "Public" },
@@ -36,7 +39,7 @@ const VisibilityToggle = ({
   section,
 }: {
   profile: Profile;
-  section: ShareableSection;
+  section: ToggleableVisibility;
 }) => {
   const update = useUpdateProfile();
   const value = profile.visibility[section];
@@ -73,7 +76,8 @@ type Props = {
   description?: string;
   profile: Profile;
   /** Shows the public/private control for this section. */
-  shareable?: ShareableSection;
+  /** Which visibility setting the Public/Private switch in the header controls. */
+  shareable?: ToggleableVisibility;
   dirty: boolean;
   /** The sections to save when the user clicks Save. */
   patch: ProfilePatchInput;

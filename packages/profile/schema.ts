@@ -229,6 +229,8 @@ export const visibilitySchema = z
     careers: z.enum(VISIBILITIES),
     skills: z.enum(VISIBILITIES),
     courses: z.enum(VISIBILITIES),
+    /** Whether a Circles post shows what each busy time is for. The times themselves always show. */
+    busyLabels: z.enum(VISIBILITIES).default("PRIVATE"),
   })
   .strict();
 
@@ -305,6 +307,7 @@ export const DEFAULT_VISIBILITY: ProfileVisibility = {
   careers: "PRIVATE",
   skills: "PRIVATE",
   courses: "PRIVATE",
+  busyLabels: "PRIVATE",
 };
 
 export const DEFAULT_SCHEDULE_PREFERENCES: SchedulePreferences = {

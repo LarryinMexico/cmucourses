@@ -2,10 +2,9 @@ import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ConversationSummary, DirectMessage } from "@cmucourses/profile";
-import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
-import { showToast } from "~/components/Toast";
-import { backendUrl } from "~/app/api/social";
+import { backendUrl, serverMessage } from "~/app/api/social";
 
+// Keys carry the Clerk user id, so a second account in the same browser never sees these.
 const CONVERSATIONS_KEY = "conversations";
 const THREAD_KEY = "thread";
 
@@ -15,10 +14,16 @@ const THREAD_KEY = "thread";
 const LIST_POLL_MS = 15_000;
 const THREAD_POLL_MS = 5_000;
 
+/** A message in the open thread; `status` is set only on ones this browser just sent. */
+export type ThreadMessage = DirectMessage & {
+  status?: "sending" | "failed";
+  error?: string;
+};
+
 export const useConversations = () => {
-  const { isSignedIn, getToken } = useAuth();
+  const { isSignedIn, userId, getToken } = useAuth();
   return useQuery({
-    queryKey: [CONVERSATIONS_KEY],
+    queryKey: [CONVERSATIONS_KEY, userId],
     queryFn: async (): Promise<ConversationSummary[]> => {
       const token = await getToken();
       if (!token) return [];
@@ -39,19 +44,29 @@ export const useConversations = () => {
  * list is refreshed afterwards to drop its unread count.
  */
 export const useThread = (profileID: string | null) => {
-  const { isSignedIn, getToken } = useAuth();
+  const { isSignedIn, userId, getToken } = useAuth();
   const queryClient = useQueryClient();
   return useQuery({
-    queryKey: [THREAD_KEY, profileID],
-    queryFn: async (): Promise<DirectMessage[]> => {
+    queryKey: [THREAD_KEY, userId, profileID],
+    queryFn: async (): Promise<ThreadMessage[]> => {
       const token = await getToken();
       if (!token) return [];
       const response = await axios.post<DirectMessage[]>(
         `${backendUrl()}/user/messages/thread`,
         { token, profileID }
       );
-      void queryClient.invalidateQueries({ queryKey: [CONVERSATIONS_KEY] });
-      return response.data;
+      void queryClient.invalidateQueries({
+        queryKey: [CONVERSATIONS_KEY, userId],
+      });
+      // Keep a failed message on screen (with Retry) across polls; the server never saw it.
+      const failed = (
+        queryClient.getQueryData<ThreadMessage[]>([
+          THREAD_KEY,
+          userId,
+          profileID,
+        ]) ?? []
+      ).filter((message) => message.status === "failed");
+      return [...response.data, ...failed];
     },
     enabled: !!isSignedIn && !!profileID,
     refetchInterval: THREAD_POLL_MS,
@@ -59,34 +74,73 @@ export const useThread = (profileID: string | null) => {
   });
 };
 
-const errorMessage = (error: unknown) => {
-  const data = axios.isAxiosError(error)
-    ? (error.response?.data as { error?: unknown } | undefined)
-    : undefined;
-  return typeof data?.error === "string"
-    ? data.error
-    : "Couldn't send the message. Please try again.";
-};
-
+/**
+ * Sends a message. It shows in the thread at once as "Sending…", is replaced by the server's copy
+ * on success, and stays as "Not sent" with the server's reason on failure.
+ */
 export const useSendMessage = () => {
-  const { getToken } = useAuth();
+  const { userId, getToken } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { profileID: string; body: string }) => {
+    mutationFn: async (input: {
+      profileID: string;
+      body: string;
+      tempID: string;
+    }) => {
       const token = await getToken();
       if (!token) throw new Error("Not signed in");
-      await axios.patch(`${backendUrl()}/user/messages`, { token, ...input });
+      await axios.patch(`${backendUrl()}/user/messages`, {
+        token,
+        profileID: input.profileID,
+        body: input.body,
+      });
+    },
+    onMutate: async (input) => {
+      const key = [THREAD_KEY, userId, input.profileID];
+      await queryClient.cancelQueries({ queryKey: key });
+      queryClient.setQueryData<ThreadMessage[]>(key, (old = []) => [
+        ...old.filter((message) => message.messageID !== input.tempID),
+        {
+          messageID: input.tempID,
+          body: input.body.trim(),
+          createdAt: new Date().toISOString(),
+          fromMe: true,
+          status: "sending",
+        },
+      ]);
+    },
+    onError: (error, input) => {
+      queryClient.setQueryData<ThreadMessage[]>(
+        [THREAD_KEY, userId, input.profileID],
+        (old = []) =>
+          old.map((message) =>
+            message.messageID === input.tempID
+              ? {
+                  ...message,
+                  status: "failed",
+                  error: serverMessage(error, "Couldn't send"),
+                }
+              : message
+          )
+      );
     },
     onSuccess: (_data, input) => {
+      queryClient.setQueryData<ThreadMessage[]>(
+        [THREAD_KEY, userId, input.profileID],
+        // Keep it on screen, no longer "Sending…", until the refetch brings the server's copy.
+        (old = []) =>
+          old.map((message) =>
+            message.messageID === input.tempID
+              ? { ...message, status: undefined }
+              : message
+          )
+      );
       void queryClient.invalidateQueries({
-        queryKey: [THREAD_KEY, input.profileID],
+        queryKey: [THREAD_KEY, userId, input.profileID],
       });
-      void queryClient.invalidateQueries({ queryKey: [CONVERSATIONS_KEY] });
+      void queryClient.invalidateQueries({
+        queryKey: [CONVERSATIONS_KEY, userId],
+      });
     },
-    onError: (error) =>
-      showToast({
-        message: errorMessage(error),
-        icon: ExclamationTriangleIcon,
-      }),
   });
 };

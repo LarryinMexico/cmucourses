@@ -234,10 +234,12 @@ type ProfilesPlannedCourses {
 }
 
 type ProfilesVisibility {
-  academic Visibility @default(PRIVATE)
-  careers  Visibility @default(PRIVATE)
-  skills   Visibility @default(PRIVATE)
-  courses  Visibility @default(PRIVATE)
+  academic   Visibility @default(PRIVATE)
+  careers    Visibility @default(PRIVATE)
+  skills     Visibility @default(PRIVATE)
+  courses    Visibility @default(PRIVATE)
+  /// whether Circles posts show what each busy time is for (times always show)
+  busyLabels Visibility @default(PRIVATE)
 }
 
 type ProfilesSavedSession {
@@ -288,20 +290,10 @@ model profiles {
   @@index([courses.courseID])
 }
 
-type SocialScheduleCourses {
+type CirclePostCourses {
   courseID String
   lecture  String?
   section  String?
-}
-
-model socialSchedules {
-  id          String                  @id @default(auto()) @map("_id") @db.ObjectId
-  clerkUserId String                  @unique
-  name        String
-  semester    String
-  year        String
-  courses     SocialScheduleCourses[]
-  updatedAt   DateTime                @updatedAt
 }
 
 model follows {
@@ -312,28 +304,6 @@ model follows {
 
   @@unique([followerUserId, followedProfileId])
   @@index([followedProfileId])
-}
-
-model scheduleReactions {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  reactorUserId   String
-  targetProfileId String   @db.ObjectId
-  reaction        String
-  updatedAt       DateTime @updatedAt
-
-  @@unique([reactorUserId, targetProfileId])
-  @@index([targetProfileId])
-}
-
-model scheduleComments {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  authorUserId    String
-  /// The profile whose published schedule is commented on.
-  targetProfileId String   @db.ObjectId
-  body            String
-  createdAt       DateTime @default(now())
-
-  @@index([targetProfileId, createdAt])
 }
 
 model directMessages {
@@ -371,4 +341,44 @@ model savedSchedules {
   updatedAt   DateTime               @updatedAt
 
   @@index([clerkUserId, updatedAt])
+}
+
+/// One student's shared schedule for one semester (sharing again replaces it). Copied from a
+/// saved schedule. The old socialSchedules / scheduleReactions / scheduleComments collections are
+/// no longer read; scripts/demo/seed-circles.mjs --migrate-old moves their data here.
+model circlePosts {
+  id               String              @id @default(auto()) @map("_id") @db.ObjectId
+  authorUserId     String
+  name             String
+  semester         String
+  year             String
+  session          String?
+  courses          CirclePostCourses[]
+  sourceScheduleId String?             @db.ObjectId
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([authorUserId, semester, year])
+  @@index([updatedAt])
+}
+
+model postReactions {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  reactorUserId String
+  postId        String   @db.ObjectId
+  reaction      String
+  updatedAt     DateTime @updatedAt
+
+  @@unique([reactorUserId, postId])
+  @@index([postId])
+}
+
+model postComments {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  authorUserId String
+  postId       String   @db.ObjectId
+  body         String
+  createdAt    DateTime @default(now())
+
+  @@index([postId, createdAt])
 }

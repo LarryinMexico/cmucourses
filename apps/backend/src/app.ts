@@ -9,8 +9,16 @@ import { getInstructors } from "~/controllers/instructors";
 import { getGeneds } from "~/controllers/geneds";
 import { getSchedules } from "~/controllers/schedules";
 import { getOwnRating, getRatings, submitRating } from "~/controllers/ratings";
-import { getSocialDirectory, publishSocialSchedule, updateFollow, updateScheduleReaction } from "~/controllers/social";
-import { addComment, deleteComment, listComments } from "~/controllers/comments";
+import { getSocialDirectory, updateFollow } from "~/controllers/social";
+import {
+  addPostComment,
+  deletePost,
+  deletePostComment,
+  getFeed,
+  listPostComments,
+  reactToPost,
+  sharePost,
+} from "~/controllers/posts";
 import { getThread, listConversations, sendMessage } from "~/controllers/messages";
 import { deleteSavedSchedule, listSavedSchedules, saveSchedule } from "~/controllers/savedSchedules";
 
@@ -50,11 +58,12 @@ app.route("/user/rating").post(requireUser, getOwnRating);
 app.route("/user/rating").patch(requireUser, submitRating);
 
 app.route("/social/directory").post(requireUser, getSocialDirectory);
-app.route("/user/social/schedule").patch(requireUser, publishSocialSchedule);
 app.route("/user/social/follow").patch(requireUser, updateFollow);
-app.route("/user/social/reaction").patch(requireUser, updateScheduleReaction);
-app.route("/social/comments").post(requireUser, listComments);
-app.route("/user/social/comment").patch(requireUser, addComment).delete(requireUser, deleteComment);
+app.route("/social/feed").post(requireUser, getFeed);
+app.route("/user/posts").patch(requireUser, sharePost).delete(requireUser, deletePost);
+app.route("/user/posts/reaction").patch(requireUser, reactToPost);
+app.route("/social/posts/comments").post(requireUser, listPostComments);
+app.route("/user/posts/comment").patch(requireUser, addPostComment).delete(requireUser, deletePostComment);
 app.route("/user/messages/conversations").post(requireUser, listConversations);
 app.route("/user/messages/thread").post(requireUser, getThread);
 app.route("/user/messages").patch(requireUser, sendMessage);

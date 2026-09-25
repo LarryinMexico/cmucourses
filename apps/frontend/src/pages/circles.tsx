@@ -1,321 +1,171 @@
 import type { NextPage } from "next";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/router";
 import { SignInButton, useAuth } from "@clerk/nextjs";
-import {
-  COMMENT_LIMITS,
-  SOCIAL_REACTIONS,
-  type PublishedSchedule,
-  type SocialDirectoryProfile,
-} from "@cmucourses/profile";
-import {
-  ChatBubbleLeftIcon,
-  ChatBubbleLeftRightIcon,
-  TrashIcon,
-} from "@heroicons/react/24/outline";
+import { EyeSlashIcon } from "@heroicons/react/24/outline";
+import type { CirclePost, SocialDirectoryProfile } from "@cmucourses/profile";
 import { Page } from "~/components/Page";
 import { Card } from "~/components/Card";
 import Link from "~/components/Link";
 import { useFetchProfile } from "~/app/api/profile";
-import {
-  useAddComment,
-  useDeleteComment,
-  usePublishSocialSchedule,
-  useReactToSchedule,
-  useScheduleComments,
-  useSocialDirectory,
-  useToggleFollow,
-} from "~/app/api/social";
-import { useAppSelector } from "~/app/hooks";
-import { selectActiveUserSchedule } from "~/app/userSchedules";
-import {
-  INPUT_CLASS,
-  PRIMARY_BUTTON_CLASS,
-} from "~/components/profile/fields";
-import { Pill } from "~/components/CourseTags";
-import MessagesCard, {
+import { useFeed, useSocialDirectory, type FeedFilter } from "~/app/api/social";
+import { classNames } from "~/app/utils";
+import PostCard from "~/components/circles/PostCard";
+import ProfileCard from "~/components/circles/ProfileCard";
+import ShareCard from "~/components/circles/ShareCard";
+import { FollowButton } from "~/components/circles/FollowButton";
+import MessagesPanel, {
   type OpenConversation,
-} from "~/components/circles/MessagesCard";
+} from "~/components/circles/MessagesPanel";
 
-const toPublishedSchedule = (
-  schedule: ReturnType<typeof selectActiveUserSchedule>
-): PublishedSchedule | null => {
-  if (!schedule || schedule.session.semester === "" || !schedule.session.year)
-    return null;
-  return {
-    name: schedule.name,
-    semester: schedule.session.semester,
-    year: schedule.session.year,
-    courses: schedule.courses.map((courseID) => ({
-      courseID,
-      lecture: schedule.courseSessions[courseID]?.Lecture || null,
-      section: schedule.courseSessions[courseID]?.Section || null,
-    })),
-  };
-};
+type Tab = "feed" | "people" | "messages";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "feed", label: "Feed" },
+  { id: "people", label: "People" },
+  { id: "messages", label: "Messages" },
+];
+const FEED_FILTERS: { id: FeedFilter; label: string }[] = [
+  { id: "all", label: "Everyone" },
+  { id: "following", label: "Following" },
+  { id: "mine", label: "My posts" },
+];
 
-/** Comments under a published schedule; loaded only once opened. Writing needs following the owner. */
-const Comments = ({ person }: { person: SocialDirectoryProfile }) => {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const { data: comments = [], isPending } = useScheduleComments(
-    person.profileID,
-    open
-  );
-  const add = useAddComment();
-  const remove = useDeleteComment();
+const ErrorLine = ({ what, retry }: { what: string; retry: () => void }) => (
+  <div className="text-gray-500 text-sm">
+    Couldn&apos;t load {what}.{" "}
+    <button type="button" className="underline" onClick={retry}>
+      Retry
+    </button>
+  </div>
+);
+
+/** The feed, a page at a time: the next page loads when the bottom comes into view. */
+const Feed = ({
+  ownCourses,
+  ownInterests,
+  onMessage,
+}: {
+  ownCourses: ReadonlySet<string>;
+  ownInterests: ReadonlySet<string>;
+  onMessage: (post: CirclePost) => void;
+}) => {
+  const [filter, setFilter] = useState<FeedFilter>("all");
+  const feed = useFeed(filter);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const posts = feed.data?.pages.flatMap((page) => page.posts) ?? [];
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
+
+  // The page scrolls inside Page's content column, not the window, so observe against the viewport.
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (
+        entries.some((e) => e.isIntersecting) &&
+        hasNextPage &&
+        !isFetchingNextPage
+      )
+        void fetchNextPage();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <div className="mt-3">
-      <button
-        type="button"
-        className="flex items-center gap-1 text-gray-500 text-xs"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <ChatBubbleLeftIcon className="h-4 w-4" />
-        {open && !isPending ? `Comments (${comments.length})` : "Comments"}
-      </button>
-      {open && (
-        <div className="mt-2 space-y-2">
-          {isPending ? (
-            <div className="text-gray-400 text-xs">Loading comments…</div>
-          ) : comments.length === 0 ? (
-            <div className="text-gray-400 text-xs">No comments yet.</div>
-          ) : (
-            <ul className="space-y-2">
-              {comments.map((comment) => (
-                <li key={comment.commentID} className="flex gap-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-gray-400 text-xs">
-                      {comment.authorName} ·{" "}
-                      {new Date(comment.createdAt).toLocaleDateString()}
-                    </div>
-                    <div className="break-words whitespace-pre-wrap text-gray-700">
-                      {comment.body}
-                    </div>
-                  </div>
-                  {comment.canDelete && (
-                    <button
-                      type="button"
-                      aria-label="Delete comment"
-                      title="Delete comment"
-                      className="h-fit shrink-0 rounded p-1 text-gray-400 hover:bg-gray-50"
-                      disabled={remove.isPending}
-                      onClick={() =>
-                        remove.mutate({
-                          profileID: person.profileID,
-                          commentID: comment.commentID,
-                        })
-                      }
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {person.following ? (
-            <div className="space-y-2">
-              <textarea
-                className={`${INPUT_CLASS} w-full`}
-                rows={2}
-                maxLength={COMMENT_LIMITS.body}
-                placeholder="Add a comment"
-                aria-label={`Comment on ${person.displayName}'s schedule`}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-              <button
-                type="button"
-                className={PRIMARY_BUTTON_CLASS}
-                disabled={draft.trim() === "" || add.isPending}
-                onClick={() =>
-                  add.mutate(
-                    { profileID: person.profileID, body: draft },
-                    { onSuccess: () => setDraft("") }
-                  )
-                }
-              >
-                Post
-              </button>
-            </div>
-          ) : (
-            <div className="text-gray-400 text-xs">
-              Connect with {person.displayName} to comment.
-            </div>
-          )}
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        {FEED_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            aria-pressed={filter === f.id}
+            className={classNames(
+              "rounded-full border px-3 py-1 text-sm",
+              filter === f.id
+                ? "border-blue-300 bg-blue-50 text-blue-800"
+                : "border-gray-200 text-gray-600"
+            )}
+            onClick={() => setFilter(f.id)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      {feed.isError ? (
+        <ErrorLine what="the feed" retry={() => void feed.refetch()} />
+      ) : feed.isPending ? (
+        <div className="text-gray-400 text-sm">Loading posts…</div>
+      ) : posts.length === 0 ? (
+        <Card>
+          <p className="text-gray-500 text-sm">
+            {filter === "mine"
+              ? "You haven't shared a schedule yet."
+              : filter === "following"
+                ? "Nobody you follow has shared a schedule yet."
+                : "No schedules shared yet. Be the first!"}
+          </p>
+        </Card>
+      ) : (
+        posts.map((post) => (
+          <PostCard
+            key={post.postID}
+            post={post}
+            ownCourses={ownCourses}
+            ownInterests={ownInterests}
+            onMessage={onMessage}
+          />
+        ))
+      )}
+      <div ref={sentinel} />
+      {isFetchingNextPage && (
+        <div className="text-center text-gray-400 text-sm">Loading more…</div>
+      )}
+      {!hasNextPage && posts.length > 0 && (
+        <div className="py-4 text-center text-gray-400 text-xs">
+          You&apos;re all caught up.
         </div>
       )}
     </div>
   );
 };
 
-const ProfileCard = ({
-  person,
-  ownCourses,
-  ownInterests,
-  onMessage,
-}: {
-  person: SocialDirectoryProfile;
-  ownCourses: ReadonlySet<string>;
-  ownInterests: ReadonlySet<string>;
-  onMessage: () => void;
-}) => {
-  const follow = useToggleFollow();
-  const react = useReactToSchedule();
-  const commonCourses = [
-    ...new Set([
-      ...person.currentCourseIDs,
-      ...(person.plannedSchedule?.courses.map((course) => course.courseID) ??
-        []),
-    ]),
-  ].filter((course) => ownCourses.has(course));
-  const commonInterests = [...person.careers, ...person.skills].filter((item) =>
-    ownInterests.has(item)
-  );
-
-  return (
-    <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Card.Header>{person.displayName}</Card.Header>
-          {person.academicSummary && (
-            <p className="mt-1 text-gray-500 text-xs">{person.academicSummary}</p>
-          )}
-          {person.bio && (
-            <p className="mt-1 text-gray-500 text-sm">{person.bio}</p>
-          )}
-        </div>
-        <button
-          type="button"
-          className={PRIMARY_BUTTON_CLASS}
-          disabled={follow.isPending}
-          onClick={() =>
-            follow.mutate({
-              profileID: person.profileID,
-              follow: !person.following,
-            })
-          }
-        >
-          {person.following ? "Connected" : "Connect"}
-        </button>
-      </div>
-
-      {person.following && person.followsMe && (
-        <button
-          type="button"
-          className="mt-3 flex items-center gap-1 text-gray-500 text-xs"
-          onClick={onMessage}
-        >
-          <ChatBubbleLeftRightIcon className="h-4 w-4" />
-          Message
-        </button>
-      )}
-
-      {commonCourses.length > 0 && (
-        <div className="mt-3">
-          <div className="text-gray-400 text-xs">Courses you share</div>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {commonCourses.map((course) => (
-              <Pill key={course} highlighted>
-                {course}
-              </Pill>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {commonInterests.length > 0 && (
-        <div className="mt-3 text-gray-500 text-xs">
-          Similar interests: {commonInterests.length}
-        </div>
-      )}
-
-      {person.currentCourseIDs.length > 0 && (
-        <div className="mt-3">
-          <div className="text-gray-400 text-xs">Taking now</div>
-          <div className="mt-1 flex flex-wrap gap-x-2 text-sm">
-            {person.currentCourseIDs.map((courseID) => (
-              <Link key={courseID} href={`/course/${courseID}`}>
-                {courseID}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {person.plannedSchedule && (
-        <div className="mt-3 rounded bg-gray-50 p-3">
-          <div className="text-gray-700 text-sm">
-            {person.plannedSchedule.name}
-          </div>
-          <div className="capitalize text-gray-400 text-xs">
-            {person.plannedSchedule.semester} {person.plannedSchedule.year}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-2 text-sm">
-            {person.plannedSchedule.courses.map((course) => (
-              <Link key={course.courseID} href={`/course/${course.courseID}`}>
-                {course.courseID}
-              </Link>
-            ))}
-          </div>
-          {person.following ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {SOCIAL_REACTIONS.map((reaction) => (
-                <button
-                  type="button"
-                  key={reaction}
-                  className={`rounded border px-2 py-1 text-xs ${
-                    person.myReaction === reaction
-                      ? "border-blue-300 bg-blue-50"
-                      : "border-gray-200"
-                  }`}
-                  onClick={() =>
-                    react.mutate({
-                      profileID: person.profileID,
-                      reaction:
-                        person.myReaction === reaction ? null : reaction,
-                    })
-                  }
-                >
-                  {reaction} {person.reactions[reaction] ?? 0}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-3 text-gray-400 text-xs">
-              Connect with {person.displayName} to react to this schedule.
-            </div>
-          )}
-          <Comments person={person} />
-        </div>
-      )}
-    </Card>
-  );
-};
-
 const CirclesContent = () => {
   const { isSignedIn } = useAuth();
+  const router = useRouter();
   const { data: profile } = useFetchProfile();
-  const { data: directory, isPending } = useSocialDirectory();
-  const people = useMemo(() => directory?.people ?? [], [directory]);
-  // Comes from the server, so it survives a reload; the directory refetches after publishing.
-  const published = directory?.me.publishedSchedule ?? null;
-  const activeSchedule = useAppSelector(selectActiveUserSchedule);
-  const publish = usePublishSocialSchedule();
+  const directory = useSocialDirectory();
+  const people = useMemo(() => directory.data?.people ?? [], [directory.data]);
+  const me = directory.data?.me;
+  const [tab, setTab] = useState<Tab>("feed");
   const [openConversation, setOpenConversation] =
     useState<OpenConversation | null>(null);
   const [studyPartnersOnly, setStudyPartnersOnly] = useState(false);
   const [similarInterestsOnly, setSimilarInterestsOnly] = useState(false);
 
+  // ?tab=feed|people|messages deep links (and reloads) land on that tab.
+  useEffect(() => {
+    const t = router.query.tab;
+    if (t === "feed" || t === "people" || t === "messages") setTab(t);
+  }, [router.query.tab]);
+  const goTo = (next: Tab) => {
+    setTab(next);
+    void router.replace({ query: { ...router.query, tab: next } }, undefined, {
+      shallow: true,
+    });
+    if (next === "messages") void directory.refetch(); // pick up a follow-back before chatting
+  };
+  const openChat = (profileID: string, displayName: string) => {
+    setOpenConversation({ profileID, displayName, canSend: true });
+    goTo("messages");
+  };
+
   const ownCourses = useMemo(
     () =>
       new Set([
         ...(profile?.courses
-          .filter((course) => course.status === "IN_PROGRESS")
-          .map((course) => course.courseID) ?? []),
-        ...(profile?.plannedCourses.map((course) => course.courseID) ?? []),
+          .filter((c) => c.status === "IN_PROGRESS")
+          .map((c) => c.courseID) ?? []),
+        ...(profile?.plannedCourses.map((c) => c.courseID) ?? []),
       ]),
     [profile]
   );
@@ -328,36 +178,15 @@ const CirclesContent = () => {
       ]),
     [profile]
   );
-  const visiblePeople = people.filter((person) => {
-    const personCourses = [
-      ...person.currentCourseIDs,
-      ...(person.plannedSchedule?.courses.map((course) => course.courseID) ??
-        []),
-    ];
-    const isStudyPartner = personCourses.some((course) =>
-      ownCourses.has(course)
-    );
-    const hasSimilarInterest = [...person.careers, ...person.skills].some(
-      (interest) => ownInterests.has(interest)
-    );
+  const matches = (person: SocialDirectoryProfile) => {
+    const courses = [...person.currentCourseIDs, ...person.postedCourseIDs];
     return (
-      (!studyPartnersOnly || isStudyPartner) &&
-      (!similarInterestsOnly || hasSimilarInterest)
+      (!studyPartnersOnly || courses.some((c) => ownCourses.has(c))) &&
+      (!similarInterestsOnly ||
+        [...person.careers, ...person.skills].some((i) => ownInterests.has(i)))
     );
-  });
-  const friendCourses = [
-    ...new Set(
-      people
-        .filter((person) => person.following)
-        .flatMap((person) => [
-          ...person.currentCourseIDs,
-          ...(person.plannedSchedule?.courses.map(
-            (course) => course.courseID
-          ) ?? []),
-        ])
-        .filter((course) => !ownCourses.has(course))
-    ),
-  ];
+  };
+  const suggestions = people.filter((person) => !person.following).slice(0, 5);
 
   if (!isSignedIn) {
     return (
@@ -367,120 +196,143 @@ const CirclesContent = () => {
     );
   }
 
-  const selectedForPublish = toPublishedSchedule(activeSchedule);
-
   return (
-    <div className="m-auto max-w-5xl space-y-6 p-6">
-      <div>
-        <h1 className="text-gray-700 text-lg">Scotty Circles</h1>
-        <p className="text-gray-400 text-sm">
-          Connect around courses, plans, and shared interests.
+    <div className="m-auto max-w-6xl p-4 md:p-6">
+      <div className="mb-4">
+        <h1 className="text-gray-800 text-xl">Scotty Circles</h1>
+        <p className="text-gray-500 text-sm">
+          Share your semester, see what others are taking, and plan together.
         </p>
       </div>
 
-      <Card>
-        <Card.Header>Share schedules</Card.Header>
-        <p className="mt-1 text-gray-500 text-sm">
-          Publish the active planned schedule, or make Courses public on your
-          Profile to share courses currently in progress.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={PRIMARY_BUTTON_CLASS}
-            disabled={!selectedForPublish || publish.isPending}
-            onClick={() => {
-              if (!selectedForPublish) return;
-              publish.mutate({ schedule: selectedForPublish });
-            }}
-          >
-            Publish active planned schedule
-          </button>
-          {published && (
-            <button
-              type="button"
-              className="rounded border border-gray-200 px-3 py-1.5 text-sm text-gray-600"
-              disabled={publish.isPending}
-              onClick={() => publish.mutate({ schedule: null })}
-            >
-              Unpublish
-            </button>
-          )}
-          <Link href="/profile#courses">Manage actual schedule sharing</Link>
+      {me && !me.visible && (
+        <div className="mb-4 flex gap-2 rounded border border-yellow-200 bg-yellow-50 p-3 text-yellow-800 text-sm">
+          <EyeSlashIcon className="h-5 w-5 shrink-0" />
+          <span>
+            Others can&apos;t find you yet, so they can&apos;t follow or message
+            you. Make a section public on your{" "}
+            <Link href="/profile">Profile</Link> or share a schedule.
+          </span>
         </div>
-        {published && (
-          <p className="mt-2 capitalize text-gray-500 text-xs">
-            Published: {published.name} · {published.semester}{" "}
-            {published.year}
-          </p>
-        )}
-      </Card>
-
-      <MessagesCard open={openConversation} onOpen={setOpenConversation} />
-
-      {friendCourses.length > 0 && (
-        <Card>
-          <Card.Header>Courses discovered through connections</Card.Header>
-          <div className="mt-2 flex flex-wrap gap-x-3 text-sm">
-            {friendCourses.map((courseID) => (
-              <Link key={courseID} href={`/course/${courseID}`}>
-                {courseID}
-              </Link>
-            ))}
-          </div>
-        </Card>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-gray-700 text-lg">People</h2>
-        <div className="flex flex-wrap gap-4">
-          <label className="text-gray-500 text-sm">
-            <input
-              type="checkbox"
-              className="mr-2"
-              checked={studyPartnersOnly}
-              onChange={(event) => setStudyPartnersOnly(event.target.checked)}
-            />
-            Study partners in my courses
-          </label>
-          <label className="text-gray-500 text-sm">
-            <input
-              type="checkbox"
-              className="mr-2"
-              checked={similarInterestsOnly}
-              onChange={(event) =>
-                setSimilarInterestsOnly(event.target.checked)
-              }
-            />
-            Similar interests
-          </label>
-        </div>
+      <div className="mb-4 flex gap-1 border-gray-200 border-b" role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            className={classNames(
+              "-mb-px border-b-2 px-4 py-2 text-sm",
+              tab === t.id
+                ? "border-blue-600 text-blue-800"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            )}
+            onClick={() => goTo(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-      {isPending ? (
-        <div className="text-gray-400">Loading people…</div>
-      ) : visiblePeople.length === 0 ? (
-        <div className="text-gray-400 text-sm">
-          {people.length > 0 && (studyPartnersOnly || similarInterestsOnly)
-            ? "No one matches these filters. Try clearing Study partners or Similar interests."
-            : "No matching profiles yet. Profiles appear here after another student makes a profile section public or publishes a schedule."}
-        </div>
+
+      {tab === "messages" ? (
+        <MessagesPanel open={openConversation} onOpen={setOpenConversation} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {visiblePeople.map((person) => (
-            <ProfileCard
-              key={person.profileID}
-              person={person}
-              ownCourses={ownCourses}
-              ownInterests={ownInterests}
-              onMessage={() =>
-                setOpenConversation({
-                  profileID: person.profileID,
-                  displayName: person.displayName,
-                  canSend: true,
-                })
-              }
-            />
-          ))}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="min-w-0">
+            {tab === "feed" ? (
+              <Feed
+                ownCourses={ownCourses}
+                ownInterests={ownInterests}
+                onMessage={(post) =>
+                  openChat(post.author.profileID, post.author.displayName)
+                }
+              />
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-4">
+                  <label className="text-gray-500 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={studyPartnersOnly}
+                      onChange={(e) => setStudyPartnersOnly(e.target.checked)}
+                    />
+                    Study partners in my courses
+                  </label>
+                  <label className="text-gray-500 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={similarInterestsOnly}
+                      onChange={(e) =>
+                        setSimilarInterestsOnly(e.target.checked)
+                      }
+                    />
+                    Similar interests
+                  </label>
+                </div>
+                {directory.isError ? (
+                  <ErrorLine
+                    what="people"
+                    retry={() => void directory.refetch()}
+                  />
+                ) : directory.isPending ? (
+                  <div className="text-gray-400 text-sm">Loading people…</div>
+                ) : people.filter(matches).length === 0 ? (
+                  <div className="text-gray-400 text-sm">
+                    {people.length > 0
+                      ? "No one matches these filters."
+                      : "No one to show yet. People appear here once they make a profile section public or share a schedule."}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {people.filter(matches).map((person) => (
+                      <ProfileCard
+                        key={person.profileID}
+                        person={person}
+                        ownCourses={ownCourses}
+                        ownInterests={ownInterests}
+                        onMessage={(p) => openChat(p.profileID, p.displayName)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <aside className="space-y-4">
+            <ShareCard myPosts={me?.posts ?? []} />
+            {suggestions.length > 0 && (
+              <Card>
+                <Card.Header>People you may know</Card.Header>
+                <ul className="mt-2 space-y-3">
+                  {suggestions.map((person) => (
+                    <li
+                      key={person.profileID}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-gray-800 text-sm">
+                          {person.displayName}
+                        </div>
+                        <div className="truncate text-gray-500 text-xs">
+                          {person.academicSummary ??
+                            `${person.postCount} posts`}
+                        </div>
+                      </div>
+                      <FollowButton
+                        profileID={person.profileID}
+                        following={person.following}
+                        followsMe={person.followsMe}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+          </aside>
         </div>
       )}
     </div>

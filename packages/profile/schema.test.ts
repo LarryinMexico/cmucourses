@@ -364,3 +364,14 @@ describe("profile patch: savedFilters", () => {
     expect(profilePatchSchema.safeParse({ savedFilters: { departments: [] } }).success).toBe(false); // must be complete
   });
 });
+
+describe("busy-time labels visibility", () => {
+  test("defaults to private and can be made public", () => {
+    const base = { academic: "PRIVATE", careers: "PRIVATE", skills: "PRIVATE", courses: "PRIVATE" };
+    expect(profilePatchSchema.parse({ visibility: base }).visibility?.busyLabels).toBe("PRIVATE");
+    expect(profilePatchSchema.parse({ visibility: { ...base, busyLabels: "PUBLIC" } }).visibility?.busyLabels).toBe(
+      "PUBLIC"
+    );
+    expect(emptyProfile().visibility.busyLabels).toBe("PRIVATE");
+  });
+});

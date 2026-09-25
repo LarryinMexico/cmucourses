@@ -93,7 +93,8 @@ export const TimeSection = ({ profile }: { profile: Profile }) => {
     <ProfileSection
       id="time"
       title="Time & format"
-      description="Your weekly busy times are used to avoid schedule conflicts."
+      description="Your weekly busy times are used to avoid schedule conflicts, and show on your Circles posts. Others see only when you are busy; set this to Public to also show what each busy time is for."
+      shareable="busyLabels"
       profile={profile}
       dirty={dirty}
       patch={draft}

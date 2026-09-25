@@ -72,7 +72,8 @@ const toProfile = (doc: ProfileDoc): Profile => ({
     semester: toSemester(semester) ?? "fall",
     year,
   })),
-  visibility: doc.visibility,
+  // busyLabels is missing on profiles saved before it existed; that reads as private.
+  visibility: { ...doc.visibility, busyLabels: doc.visibility.busyLabels ?? "PRIVATE" },
   // A stored optional column that was never set is absent, not null, so each one is normalized.
   savedFilters: doc.savedFilters
     ? {
