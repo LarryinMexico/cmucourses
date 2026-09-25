@@ -9,3 +9,4 @@ export * from "./scheduleGenerator";
 export * from "./plan";
 export * from "./requirements";
 export * from "./social";
+export * from "./savedSchedules";

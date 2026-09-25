@@ -9,6 +9,7 @@ import { Session } from "./types";
 import { v4 as uuidv4 } from "uuid";
 import { RootState } from "./store";
 import type { SharedScheduleData } from "./scheduleSharing";
+import type { SavedSchedule } from "@cmucourses/profile";
 
 export interface CourseSessions {
   [courseID: string]: {
@@ -33,6 +34,8 @@ export interface UserSchedule {
   hoverSession?: HoverSession;
   /** Set when this schedule came from the Generate panel, for a "why" badge. Absent otherwise. */
   generated?: GeneratedMeta;
+  /** The account-saved schedule this copy was opened from, so Save can update it in place. */
+  savedId?: string;
 }
 
 export interface GeneratedMeta {
@@ -45,6 +48,11 @@ export interface GeneratedMeta {
 export interface UserSchedulesState {
   active: string | null;
   saved: { [id: string]: UserSchedule };
+  /**
+   * The Clerk user this browser-local working copy belongs to. It lives in localStorage, so without
+   * this a second account in the same browser would see (and publish) the first one's schedules.
+   */
+  ownerUserId?: string | null;
 }
 
 const initialState: UserSchedulesState = {
@@ -100,6 +108,59 @@ export const userSchedulesSlice = createSlice({
   name: "userSchedules",
   initialState,
   reducers: {
+    /** Opens an account-saved schedule as the active working copy (or switches to its open copy). */
+    loadSavedSchedule: (state, action: PayloadAction<SavedSchedule>) => {
+      const saved = action.payload;
+      const open = Object.values(state.saved).find(
+        (s) => s.savedId === saved.id
+      );
+      if (open) {
+        state.active = open.id;
+        return;
+      }
+      const id = uuidv4();
+      const schedule = getNewUserSchedule(
+        saved.courses.map((course) => course.courseID),
+        id
+      );
+      schedule.name = saved.name;
+      schedule.savedId = saved.id;
+      schedule.session = {
+        year: saved.year,
+        semester: saved.semester,
+        ...(saved.session ? { session: saved.session } : {}),
+      };
+      for (const course of saved.courses) {
+        const entry = schedule.courseSessions[course.courseID];
+        if (!entry) continue;
+        entry.Lecture = course.lecture ?? "";
+        entry.Section = course.section ?? "";
+      }
+      schedule.numColors = saved.courses.length;
+      state.saved[id] = schedule;
+      state.active = id;
+    },
+    /** Remembers which account-saved schedule the active copy now corresponds to. */
+    setActiveScheduleSavedId: (
+      state,
+      action: PayloadAction<string | undefined>
+    ) => {
+      const schedule = getActiveSchedule(state);
+      if (!schedule) return;
+      schedule.savedId = action.payload;
+    },
+    /**
+     * Called whenever a signed-in account is known. A different account gets an empty builder;
+     * a builder from before owners were recorded is kept for the first account that signs in.
+     */
+    resetForUser: (state, action: PayloadAction<string>) => {
+      if (state.ownerUserId === action.payload) return;
+      if (state.ownerUserId) {
+        state.saved = {};
+        state.active = null;
+      }
+      state.ownerUserId = action.payload;
+    },
     changeActiveSchedule: (state, action: PayloadAction<string>) => {
       state.active = action.payload;
     },

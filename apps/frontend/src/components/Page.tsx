@@ -8,6 +8,8 @@ import { SideNav } from "./SideNav";
 import Link from "./Link";
 import { useAuth } from "@clerk/nextjs";
 import { usePostHog } from "posthog-js/react";
+import { useAppDispatch } from "~/app/hooks";
+import { userSchedulesSlice } from "~/app/userSchedules";
 
 type Props = {
   sidebar?: React.ReactNode;
@@ -19,6 +21,7 @@ type Props = {
 export const Page = ({ sidebar, content, activePage,title }: Props) => {
   const { isSignedIn, userId } = useAuth();
   const posthog = usePostHog();
+  const dispatch = useAppDispatch();
 
   useEffect(() => {
     // Set the browser tab title
@@ -30,10 +33,12 @@ export const Page = ({ sidebar, content, activePage,title }: Props) => {
   useEffect(() => {
     if (isSignedIn && userId) {
       posthog?.identify(userId);
+      // The schedule builder lives in localStorage; give another account in this browser its own.
+      dispatch(userSchedulesSlice.actions.resetForUser(userId));
     } else {
       posthog?.reset();
     }
-  }, [posthog, isSignedIn, userId]);
+  }, [posthog, isSignedIn, userId, dispatch]);
 
   return (
     <div className="accent-blue-600 flex flex-col md:h-screen min-h-screen">

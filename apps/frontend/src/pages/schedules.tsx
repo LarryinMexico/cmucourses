@@ -12,6 +12,7 @@ import Loading from "~/components/Loading";
 import ShowFilter from "~/components/ShowFilter";
 import ScheduleCalendar from "~/components/ScheduleCalendar";
 import SectionSelector from "~/components/SectionSelector";
+import SavedSchedulesCard from "~/components/schedules/SavedSchedulesCard";
 import GeneratePanel from "~/components/schedules/GeneratePanel";
 import { CAL_VIEW, SCHED_VIEW } from "~/app/constants";
 
@@ -53,6 +54,7 @@ const SchedulePage: NextPage = () => {
       sidebar={
         <>
           <ScheduleSelector />
+          <SavedSchedulesCard />
           <Aggregate />
           <ShowFilter />
           <SectionSelector courseIDs={scheduled} />

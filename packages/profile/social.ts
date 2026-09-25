@@ -3,7 +3,7 @@ import { PROFILE_SEMESTERS, standardizeCourseID } from "./schema";
 
 export const SOCIAL_REACTIONS = ["👍", "🎉", "🔥", "📚"] as const;
 
-const publishedCourseSchema = z
+export const publishedCourseSchema = z
   .object({
     courseID: z
       .string()

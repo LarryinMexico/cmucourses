@@ -83,3 +83,75 @@ describe("applyGeneratedSchedule", () => {
     }
   });
 });
+
+describe("loadSavedSchedule", () => {
+  const saved = {
+    id: "64b7f0c2a1d3e4f5a6b7c8d9",
+    name: "Fall plan",
+    semester: "summer" as const,
+    year: "2026",
+    session: "summer one" as const,
+    courses: [
+      { courseID: "15-213", lecture: "Lec 1", section: "A" },
+      { courseID: "21-127", lecture: null, section: null },
+    ],
+    createdAt: "",
+    updatedAt: "",
+  };
+
+  it("opens it as a new active schedule with its semester, picks and colours", () => {
+    const before = start();
+    const state = reducer(before, actions.loadSavedSchedule(saved));
+    const schedule = active(state);
+    expect(state.active).not.toBe(before.active);
+    expect(schedule.name).toBe("Fall plan");
+    expect(schedule.savedId).toBe(saved.id);
+    expect(schedule.session).toEqual({
+      year: "2026",
+      semester: "summer",
+      session: "summer one",
+    });
+    expect(schedule.courses).toEqual(["15-213", "21-127"]);
+    expect(schedule.courseSessions["15-213"]).toMatchObject({
+      Lecture: "Lec 1",
+      Section: "A",
+    });
+    expect(schedule.courseSessions["21-127"]).toMatchObject({
+      Lecture: "",
+      Section: "",
+    });
+    expect(schedule.courseSessions["15-213"]!.Color).not.toBe(
+      schedule.courseSessions["21-127"]!.Color
+    );
+  });
+
+  it("opening the same saved schedule again switches to the open copy", () => {
+    const once = reducer(start(), actions.loadSavedSchedule(saved));
+    const twice = reducer(once, actions.loadSavedSchedule(saved));
+    expect(Object.keys(twice.saved)).toHaveLength(
+      Object.keys(once.saved).length
+    );
+    expect(twice.active).toBe(once.active);
+  });
+});
+
+describe("resetForUser", () => {
+  it("keeps the builder for the same account", () => {
+    const mine = reducer(start(), actions.resetForUser("user_a"));
+    expect(reducer(mine, actions.resetForUser("user_a"))).toEqual(mine);
+  });
+
+  it("starts empty when a different account signs in", () => {
+    const mine = reducer(start(), actions.resetForUser("user_a"));
+    const theirs = reducer(mine, actions.resetForUser("user_b"));
+    expect(theirs.saved).toEqual({});
+    expect(theirs.active).toBeNull();
+    expect(theirs.ownerUserId).toBe("user_b");
+  });
+
+  it("a builder from before accounts were tracked is claimed by the first account", () => {
+    const legacy = start();
+    const claimed = reducer(legacy, actions.resetForUser("user_a"));
+    expect(claimed.saved).toEqual(legacy.saved);
+  });
+});

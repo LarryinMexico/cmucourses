@@ -350,3 +350,25 @@ model directMessages {
   @@index([conversationKey, createdAt])
   @@index([recipientUserId, readAt])
 }
+
+type SavedScheduleCourses {
+  courseID String
+  lecture  String?
+  section  String?
+}
+
+/// A named schedule kept on the account (the builder's working copy stays in the browser).
+model savedSchedules {
+  id          String                 @id @default(auto()) @map("_id") @db.ObjectId
+  clerkUserId String
+  name        String
+  semester    String
+  year        String
+  /// "summer one" | "summer two" | "summer all"; only on a summer
+  session     String?
+  courses     SavedScheduleCourses[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@index([clerkUserId, updatedAt])
+}
