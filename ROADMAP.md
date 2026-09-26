@@ -136,7 +136,7 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
 
 ## V4
 
-### Scotty Circles — Done (notifications out of scope)
+### Scotty Circles — Done
 
 > Updated 2026-09-20: built ahead of V1-V3. Completed 2026-09-23 together with the remaining V1-V3 gaps. A directory of
 > other students' public profiles, publishing your active schedule to it, following other
@@ -160,8 +160,6 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
   rework fixed why two real accounts could not message: invisible profiles, a directory that never
   refreshed, one-way follows labelled "Connected", Message doing nothing visible, hidden errors, and
   caches shared between accounts in one browser
-- [ ] ~~Notifications~~ — **Out of scope (decision 2026-09-23, reaffirmed 2026-09-25).** No bell, toast
-  or email; unread counts appear only in the chat list
 - Demo data: `bun run demo-seed` (dry run first; `--yes`, `--with-real-users`, `--remove`,
   `--migrate-old`) fills Circles with fake `demo_` students
 
@@ -169,6 +167,6 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
 
 - **Browser check (2026-09-23), partial.** Driven in a signed-in Chrome session against a local database: Save / Use my default; Offered in with the Summer One/Two/All entries; the availability filter (8398 → 5020 results, full first page, page count and header agreeing, after fixing a header that ignored the filter); the semester plan (two semesters in order, unit totals, one course in two semesters); the generator pool with "Use this schedule" adding the chosen courses; the rating form and averages; Circles reactions, comments (post, delete, who may delete), the follow gate for strangers, and direct messages (send, unread, opening marks read, a new message arriving by polling). **Not exercised:** the automatic apply of the default on page load, Clear default, adding to the plan through the picker, lock/exclude in the Generate panel, dark mode, and any second *real* account (the other side of comments and messages was a seeded fake user, so Circles was never used from both ends). Screenshots could not be captured in that session, so layout and styling were checked through the DOM, not by eye.
 - **Backend tests** (`bun test` in `apps/backend`, 72) mock the database, so they prove what a handler asks for, not that MongoDB accepts it; every query added this round was also run against a real local replica set, which found two bugs a mock cannot (Prisma's `readAt: null` does not match a missing field, so unread counts were always 0). Not covered by any automated test: the search aggregation itself (verified by comparison against the client, not in CI), token verification, and FCE.
-- Messages are polled, not pushed; there are no notifications. Conversation lists scan the latest 1,000 messages, threads show the latest 100, comments the latest 200, the directory the first 100 profiles.
+- Messages are polled, not pushed. Conversation lists scan the latest 1,000 messages, threads show the latest 100, comments the latest 200, the directory the first 100 profiles.
 - The semester plan checks units only, not hours per week; requirements exist for MISM only; the generator pool holds at most 12 courses.
 - Modality and mini filters are not applicable until the catalog carries those fields.
