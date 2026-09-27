@@ -65,7 +65,7 @@ export const CoursePicker = ({
   const nameOf = (courseID: string) => names?.get(courseID) ?? "";
 
   return (
-    <div className="relative min-w-0 flex-1 text-gray-500 text-sm">
+    <div className="relative min-w-0 flex-1 basis-full text-gray-500 text-sm sm:basis-60">
       <Combobox value={value} onChange={onChange} onClose={() => setQuery("")}>
         <ComboboxButton
           as="div"

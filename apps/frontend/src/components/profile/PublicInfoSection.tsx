@@ -16,6 +16,7 @@ export const PublicInfoSection = ({ profile }: { profile: Profile }) => {
       title="Public info"
       description="How you appear in Scotty Circles. Individual profile sections still follow their Public/Private controls."
       profile={profile}
+      headerBadge="public"
       dirty={dirty}
       patch={draft}
     >

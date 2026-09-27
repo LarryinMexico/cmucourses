@@ -123,6 +123,7 @@ export function Select<T extends string | number | null>({
   placeholder = "None",
   className,
   inline = false,
+  ariaLabel,
 }: {
   value: T;
   options: SelectOption<T>[];
@@ -131,6 +132,7 @@ export function Select<T extends string | number | null>({
   className?: string;
   /** Sits on a row with other inputs instead of under a label. */
   inline?: boolean;
+  ariaLabel?: string;
 }) {
   const current = options.find((option) => option.value === value);
   // A null value is "not set": show the placeholder even if a "None" option exists.
@@ -140,6 +142,7 @@ export function Select<T extends string | number | null>({
     <div className={classNames("relative text-gray-500 text-sm", className)}>
       <Listbox value={value} onChange={onChange}>
         <ListboxButton
+          aria-label={ariaLabel}
           className={classNames(BUTTON_CLASS, inline ? undefined : "mt-2")}
         >
           <span className="block truncate p-0.5">{display}</span>

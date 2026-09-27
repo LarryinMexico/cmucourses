@@ -10,9 +10,14 @@ import {
   MODALITY_OPTIONS,
   timeToMinutes,
 } from "./options";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import {
+  ProfileSection,
+  useDraft,
+  VisibilityToggle,
+} from "./ProfileSection";
 
 // Lets the preference be cleared back to "not set".
+
 const NO_PREFERENCE = { value: null, label: "No preference" } as const;
 
 const NEW_BLOCK: BusyBlock = {
@@ -62,7 +67,7 @@ const BusyBlockRow = ({
       }}
     />
     <input
-      className={classNames(INPUT_CLASS, "flex-1")}
+      className={classNames(INPUT_CLASS, "flex-1 basis-40")}
       placeholder="Label (optional)"
       maxLength={LIMITS.busyBlockLabel}
       value={block.label ?? ""}
@@ -80,6 +85,10 @@ const BusyBlockRow = ({
   </div>
 );
 
+// "00:00" as an end time means midnight at the end of the day.
+const endOfDay = (minutes: number | null) =>
+  minutes === 0 ? 1440 : minutes;
+
 export const TimeSection = ({ profile }: { profile: Profile }) => {
   const { draft, setDraft, dirty } = useDraft({
     modality: profile.modality,
@@ -93,8 +102,8 @@ export const TimeSection = ({ profile }: { profile: Profile }) => {
     <ProfileSection
       id="time"
       title="Time & format"
-      description="Your weekly busy times are used to avoid schedule conflicts, and show on your Circles posts. Others see only when you are busy; set this to Public to also show what each busy time is for."
-      shareable="busyLabels"
+      description="Weekly busy times help avoid conflicts and appear on your Circles posts."
+      headerBadge="none"
       profile={profile}
       dirty={dirty}
       patch={draft}
@@ -115,7 +124,14 @@ export const TimeSection = ({ profile }: { profile: Profile }) => {
         ))}
       </div>
       <div className="space-y-2">
-        <div className="text-gray-500 text-sm">Weekly busy times</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-gray-500 text-sm">Weekly busy times</div>
+          <VisibilityToggle
+            profile={profile}
+            section="busyLabels"
+            label="Show what each busy time is for on Circles"
+          />
+        </div>
         {draft.busyBlocks.length === 0 && (
           <div className="text-gray-400 text-sm">No busy times yet.</div>
         )}
@@ -188,8 +204,9 @@ export const TimeSection = ({ profile }: { profile: Profile }) => {
                 ...draft,
                 schedulePreferences: {
                   ...draft.schedulePreferences,
+                  // "00:00" as the latest end means midnight, which the schema stores as 1440.
                   latestEnd: e.target.value
-                    ? timeToMinutes(e.target.value)
+                    ? endOfDay(timeToMinutes(e.target.value))
                     : null,
                 },
               })

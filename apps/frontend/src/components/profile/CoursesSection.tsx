@@ -94,7 +94,7 @@ export const CoursesSection = ({ profile }: { profile: Profile }) => {
             key={record.courseID}
             className="flex flex-wrap items-center gap-2 py-2 text-gray-700 text-sm"
           >
-            <div className="min-w-0 flex-1 truncate">
+            <div className="min-w-0 flex-1 basis-full truncate sm:basis-48">
               <Link href={`/course/${record.courseID}`}>{record.courseID}</Link>
               <span className="ml-2">{nameOf(record.courseID)}</span>
             </div>

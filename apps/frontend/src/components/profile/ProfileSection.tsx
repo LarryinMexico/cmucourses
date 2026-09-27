@@ -34,12 +34,15 @@ const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
   { value: "PUBLIC", label: "Public" },
 ];
 
-const VisibilityToggle = ({
+export const VisibilityToggle = ({
   profile,
   section,
+  label,
 }: {
   profile: Profile;
   section: ToggleableVisibility;
+  /** Shown before the switch and used as its accessible name. */
+  label?: string;
 }) => {
   const update = useUpdateProfile();
   const value = profile.visibility[section];
@@ -47,9 +50,11 @@ const VisibilityToggle = ({
 
   return (
     <div className="flex items-center gap-1">
+      {label && <span className="mr-1 text-gray-500 text-sm">{label}</span>}
       <Icon className="h-4 w-4 stroke-gray-500" />
       <Select
         inline
+        ariaLabel={label}
         className="w-28"
         value={value}
         options={VISIBILITY_OPTIONS}
@@ -70,14 +75,22 @@ export const AlwaysPrivate = () => (
   </div>
 );
 
+export const AlwaysPublic = () => (
+  <div className="flex items-center gap-1 text-gray-500 text-sm">
+    <GlobeAltIcon className="h-4 w-4 stroke-gray-500" />
+    Shown in Scotty Circles
+  </div>
+);
+
 type Props = {
   id: string;
   title: string;
   description?: string;
   profile: Profile;
-  /** Shows the public/private control for this section. */
   /** Which visibility setting the Public/Private switch in the header controls. */
   shareable?: ToggleableVisibility;
+  /** The fixed badge shown when there is no switch. Defaults to "private". */
+  headerBadge?: "private" | "public" | "none";
   dirty: boolean;
   /** The sections to save when the user clicks Save. */
   patch: ProfilePatchInput;
@@ -91,6 +104,7 @@ export const ProfileSection = ({
   description,
   profile,
   shareable,
+  headerBadge = "private",
   dirty,
   patch,
   onSaved,
@@ -113,17 +127,21 @@ export const ProfileSection = ({
     <div id={id} className="scroll-mt-6">
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
+          <div className="min-w-0 flex-1">
             <Card.Header>{title}</Card.Header>
             {description && (
               <div className="mt-1 text-gray-500 text-sm">{description}</div>
             )}
           </div>
-          {shareable ? (
-            <VisibilityToggle profile={profile} section={shareable} />
-          ) : (
-            <AlwaysPrivate />
-          )}
+          <div className="shrink-0">
+            {shareable ? (
+              <VisibilityToggle profile={profile} section={shareable} />
+            ) : headerBadge === "public" ? (
+              <AlwaysPublic />
+            ) : headerBadge === "private" ? (
+              <AlwaysPrivate />
+            ) : null}
+          </div>
         </div>
         <div className="mt-4 space-y-4">{children}</div>
         <div className="mt-4 flex items-center justify-end gap-3">
