@@ -6,6 +6,7 @@ import { useSavedSchedules } from "~/app/api/savedSchedules";
 import { useDeletePost, useSharePost } from "~/app/api/social";
 import { sessionToString } from "~/app/utils";
 import { INPUT_CLASS, PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
+import InlineConfirm from "~/components/InlineConfirm";
 
 const termOf = (s: { semester: string; year: string }) =>
   sessionToString({
@@ -15,7 +16,7 @@ const termOf = (s: { semester: string; year: string }) =>
 
 /** Share one of your saved schedules. Each semester holds one post; sharing again replaces it. */
 const ShareCard = ({ myPosts }: { myPosts: MyPostSummary[] }) => {
-  const { data: saved = [], isPending } = useSavedSchedules();
+  const { data: saved = [], isPending, isError, refetch } = useSavedSchedules();
   const share = useSharePost();
   const remove = useDeletePost();
   const [chosen, setChosen] = useState<string>("");
@@ -32,6 +33,17 @@ const ShareCard = ({ myPosts }: { myPosts: MyPostSummary[] }) => {
       {isPending ? (
         <div className="mt-2 text-gray-400 text-sm">
           Loading your schedules…
+        </div>
+      ) : isError ? (
+        <div className="mt-2 text-gray-500 text-sm">
+          Couldn&apos;t load your schedules ·{" "}
+          <button
+            type="button"
+            className="text-gray-500 underline"
+            onClick={() => void refetch()}
+          >
+            Retry
+          </button>
         </div>
       ) : saved.length === 0 ? (
         <p className="mt-2 text-gray-500 text-sm">
@@ -81,19 +93,27 @@ const ShareCard = ({ myPosts }: { myPosts: MyPostSummary[] }) => {
             {myPosts.map((p) => (
               <li
                 key={p.postID}
-                className="flex items-center justify-between py-1 text-sm"
+                className="flex items-center justify-between gap-2 py-1 text-sm"
               >
-                <span className="text-gray-700">
+                <span className="min-w-0 truncate text-gray-700">
                   {p.name} <span className="text-gray-400">· {termOf(p)}</span>
                 </span>
-                <button
-                  type="button"
-                  className="text-gray-500 text-xs underline"
+                <InlineConfirm
+                  question="Delete this post and its comments?"
+                  confirmLabel="Delete"
                   disabled={remove.isPending}
-                  onClick={() => remove.mutate({ postId: p.postID })}
-                >
-                  Delete
-                </button>
+                  onConfirm={() => remove.mutate({ postId: p.postID })}
+                  trigger={(open) => (
+                    <button
+                      type="button"
+                      className="shrink-0 text-gray-500 text-xs underline"
+                      disabled={remove.isPending}
+                      onClick={open}
+                    >
+                      Delete
+                    </button>
+                  )}
+                />
               </li>
             ))}
           </ul>

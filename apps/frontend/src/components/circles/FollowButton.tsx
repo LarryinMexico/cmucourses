@@ -1,5 +1,6 @@
 import React from "react";
 import { useToggleFollow } from "~/app/api/social";
+import InlineConfirm from "~/components/InlineConfirm";
 import {
   PRIMARY_BUTTON_CLASS,
   SECONDARY_BUTTON_CLASS,
@@ -13,10 +14,13 @@ export const FollowButton = ({
   profileID,
   following,
   followsMe,
+  displayName,
 }: {
   profileID: string;
   following: boolean;
   followsMe: boolean;
+  /** For the unfollow confirmation. */
+  displayName: string;
 }) => {
   const follow = useToggleFollow();
   const label = following
@@ -26,18 +30,32 @@ export const FollowButton = ({
     : followsMe
       ? "Follow back"
       : "Follow";
-  return (
+  const button = (onClick: () => void) => (
     <button
       type="button"
       // Never wraps or shrinks: a narrow column squeezed "Follow back" onto two lines.
       className={`${following ? SECONDARY_BUTTON_CLASS : PRIMARY_BUTTON_CLASS} shrink-0 whitespace-nowrap`}
       disabled={follow.isPending}
       title={following ? "Click to unfollow" : undefined}
-      onClick={() => follow.mutate({ profileID, follow: !following })}
+      onClick={onClick}
     >
       {label}
     </button>
   );
+  const toggle = () => follow.mutate({ profileID, follow: !following });
+
+  // Unfollowing a mutual connection also ends messaging, so it is asked first.
+  if (following && followsMe)
+    return (
+      <InlineConfirm
+        trigger={(open) => button(open)}
+        question={`Unfollow ${displayName}? You won't be able to message each other.`}
+        confirmLabel="Unfollow"
+        disabled={follow.isPending}
+        onConfirm={toggle}
+      />
+    );
+  return button(toggle);
 };
 
 export const FollowsYouBadge = ({ show }: { show: boolean }) =>

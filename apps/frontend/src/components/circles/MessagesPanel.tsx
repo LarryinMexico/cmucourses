@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeftIcon, PaperAirplaneIcon } from "@heroicons/react/24/outline";
 import { MESSAGE_LIMITS } from "@cmucourses/profile";
 import {
@@ -88,26 +88,41 @@ const Thread = ({
   } = useThread(open.profileID);
   const send = useSendMessage();
   const [draft, setDraft] = useState("");
-  const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Whether the reader was near the bottom before the latest render; starts true so opening scrolls.
+  const nearBottom = useRef(true);
 
-  // Newest message in view whenever the thread opens or a message arrives.
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, open.profileID]);
+  // Follow new messages only when already reading the newest ones; scrolling up to read history stays put.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el && nearBottom.current) el.scrollTop = el.scrollHeight;
+  }, [messages.length, isPending]);
   useEffect(() => {
     inputRef.current?.focus();
   }, [open.profileID]);
 
-  const submit = (body: string, tempID = `temp-${Date.now()}`) => {
-    if (body.trim() === "") return;
-    send.mutate({ profileID: open.profileID, body, tempID });
+  const resize = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  const submit = () => {
+    if (draft.trim() === "") return;
+    nearBottom.current = true;
+    send.mutate({
+      profileID: open.profileID,
+      body: draft,
+      tempID: `temp-${Date.now()}`,
+    });
     setDraft("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
   };
 
   let lastDay = "";
   return (
-    <div className="flex h-[32rem] flex-col">
+    <div className="flex h-[70vh] max-h-[32rem] flex-col">
       <div className="flex items-center gap-2 border-gray-100 border-b pb-2">
         <button
           type="button"
@@ -119,7 +134,15 @@ const Thread = ({
         </button>
         <div className="text-gray-800 font-semibold">{open.displayName}</div>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto py-3 pr-1">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-2 overflow-y-auto py-3 pr-1"
+        onScroll={(event) => {
+          const el = event.currentTarget;
+          nearBottom.current =
+            el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+      >
         {isError ? (
           <div className="text-gray-500 text-sm">
             Couldn&apos;t load messages.{" "}
@@ -151,13 +174,18 @@ const Thread = ({
                 )}
                 <Bubble
                   message={message}
-                  onRetry={() => submit(message.body, message.messageID)}
+                  onRetry={() =>
+                    send.mutate({
+                      profileID: open.profileID,
+                      body: message.body,
+                      tempID: message.messageID,
+                    })
+                  }
                 />
               </React.Fragment>
             );
           })
         )}
-        <div ref={endRef} />
       </div>
       {open.canSend ? (
         <div className="flex items-end gap-2 border-gray-100 border-t pt-2">
@@ -169,7 +197,10 @@ const Thread = ({
             placeholder={`Message ${open.displayName}`}
             aria-label={`Message ${open.displayName}`}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              resize(event.target);
+            }}
             onKeyDown={(event) => {
               // Enter sends, Shift+Enter is a new line; never while an IME is composing.
               if (
@@ -178,7 +209,7 @@ const Thread = ({
                 !event.nativeEvent.isComposing
               ) {
                 event.preventDefault();
-                submit(draft);
+                submit();
               }
             }}
           />
@@ -187,7 +218,7 @@ const Thread = ({
             aria-label="Send"
             className="nightwind-prevent rounded-full bg-blue-600 p-2 text-white disabled:opacity-40"
             disabled={draft.trim() === ""}
-            onClick={() => submit(draft)}
+            onClick={submit}
           >
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
@@ -254,7 +285,7 @@ const MessagesPanel = ({
             Message.
           </p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="max-h-[70vh] space-y-1 overflow-y-auto">
             {listed && (
               <li className="rounded bg-gray-50 px-2 py-2 text-gray-800 text-sm">
                 {current.displayName} (new)

@@ -7,6 +7,7 @@ import {
   usePostComments,
 } from "~/app/api/social";
 import { INPUT_CLASS, PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
+import InlineConfirm from "~/components/InlineConfirm";
 
 /** A post's comments. Anyone can read them; writing needs following the author. */
 const PostComments = ({ post }: { post: CirclePost }) => {
@@ -22,7 +23,7 @@ const PostComments = ({ post }: { post: CirclePost }) => {
   const canWrite = post.following && !post.isMine;
 
   const submit = () => {
-    if (draft.trim() === "") return;
+    if (draft.trim() === "" || add.isPending) return;
     add.mutate(
       { postId: post.postID, body: draft },
       { onSuccess: () => setDraft("") }
@@ -62,21 +63,29 @@ const PostComments = ({ post }: { post: CirclePost }) => {
                 </div>
               </div>
               {comment.canDelete && (
-                <button
-                  type="button"
-                  aria-label="Delete comment"
-                  title="Delete comment"
-                  className="h-fit shrink-0 rounded p-1 text-gray-400 hover:bg-gray-50"
+                <InlineConfirm
+                  question="Delete this comment?"
+                  confirmLabel="Delete"
                   disabled={remove.isPending}
-                  onClick={() =>
+                  onConfirm={() =>
                     remove.mutate({
                       postId: post.postID,
                       commentID: comment.commentID,
                     })
                   }
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
+                  trigger={(open) => (
+                    <button
+                      type="button"
+                      aria-label="Delete comment"
+                      title="Delete comment"
+                      className="h-fit shrink-0 rounded p-1 text-gray-400 hover:bg-gray-50"
+                      disabled={remove.isPending}
+                      onClick={open}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  )}
+                />
               )}
             </li>
           ))}
@@ -112,12 +121,14 @@ const PostComments = ({ post }: { post: CirclePost }) => {
             Post
           </button>
         </div>
+      ) : post.isMine ? (
+        <div className="text-gray-400 text-xs">
+          You can reply to comments on others&apos; posts.
+        </div>
       ) : (
-        !post.isMine && (
-          <div className="text-gray-400 text-xs">
-            Follow {post.author.displayName} to comment.
-          </div>
-        )
+        <div className="text-gray-400 text-xs">
+          Follow {post.author.displayName} to comment.
+        </div>
       )}
     </div>
   );

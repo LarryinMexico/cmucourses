@@ -1,9 +1,15 @@
 import React, { useMemo } from "react";
 import type { CirclePost } from "@cmucourses/profile";
-import { useFetchCourseInfos } from "~/app/api/course";
+import { useCourseInfosStatus } from "~/app/api/course";
 import { meetingsForSchedule } from "~/app/scheduleSharing";
 import { getCalendarColor, sessionToString } from "~/app/utils";
-import { GRID_DAYS, GRID_END, GRID_START, layoutWeek } from "~/app/weekGrid";
+import {
+  GRID_DAYS,
+  GRID_END,
+  GRID_START,
+  layoutWeek,
+  unplacedCourses,
+} from "~/app/weekGrid";
 
 const DAY_LABELS = ["", "Mon", "Tue", "Wed", "Thu", "Fri"];
 const HOURS = Array.from(
@@ -28,7 +34,11 @@ const WeekGrid = ({ post }: { post: CirclePost }) => {
     () => post.courses.map((course) => course.courseID),
     [post.courses]
   );
-  const details = useFetchCourseInfos(courseIDs);
+  const {
+    courses: details,
+    isPending: loading,
+    notFound,
+  } = useCourseInfosStatus(courseIDs);
   const semester = sessionToString({
     year: post.year,
     semester: post.semester,
@@ -45,14 +55,16 @@ const WeekGrid = ({ post }: { post: CirclePost }) => {
     const colors = Object.fromEntries(
       post.courses.map((course, i) => [course.courseID, getCalendarColor(i)])
     );
-    return layoutWeek(
-      meetingsForSchedule(semester, selections, details),
-      post.busyBlocks,
-      colors
-    );
-  }, [post.courses, post.busyBlocks, details, semester]);
-
-  const loading = details.length < courseIDs.length;
+    const meetings = meetingsForSchedule(semester, selections, details);
+    const laid = layoutWeek(meetings, post.busyBlocks, colors);
+    return {
+      blocks: laid.blocks,
+      offGrid: [
+        ...laid.offGrid,
+        ...unplacedCourses(courseIDs, details, semester, meetings, notFound),
+      ],
+    };
+  }, [post.courses, post.busyBlocks, details, semester, courseIDs, notFound]);
 
   return (
     <div>
@@ -77,11 +89,7 @@ const WeekGrid = ({ post }: { post: CirclePost }) => {
           ))}
         </div>
         {GRID_DAYS.map((day) => (
-          <div
-            key={day}
-            className="relative flex-1 border-gray-100 border-l"
-            aria-label={DAY_LABELS[day]}
-          >
+          <div key={day} className="relative flex-1 border-gray-100 border-l">
             {HOURS.slice(1, -1).map((h, i) => (
               <div
                 key={h}
@@ -97,12 +105,15 @@ const WeekGrid = ({ post }: { post: CirclePost }) => {
                   title={`${block.title}${block.subtitle ? ` ${block.subtitle}` : ""}`}
                   className={
                     block.kind === "busy"
-                      ? "absolute inset-x-0.5 overflow-hidden rounded px-1 text-gray-600 text-[10px] leading-tight"
-                      : "nightwind-prevent absolute inset-x-0.5 overflow-hidden rounded px-1 text-[10px] leading-tight shadow-sm"
+                      ? "absolute overflow-hidden rounded px-1 text-gray-600 text-[10px] leading-tight"
+                      : "nightwind-prevent absolute overflow-hidden rounded px-1 text-[10px] leading-tight shadow-sm"
                   }
                   style={{
                     top: `${block.top}%`,
                     height: `${block.height}%`,
+                    // Overlapping blocks share the day's width, with a 1px gutter.
+                    left: `calc(${(block.col / block.cols) * 100}% + 1px)`,
+                    width: `calc(${100 / block.cols}% - 2px)`,
                     ...(block.kind === "busy"
                       ? BUSY_STYLE
                       : {
@@ -126,10 +137,12 @@ const WeekGrid = ({ post }: { post: CirclePost }) => {
         )}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-3 text-gray-500 text-xs">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded" style={BUSY_STYLE} />
-          Busy
-        </span>
+        {post.busyBlocks.length > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded" style={BUSY_STYLE} />
+            Busy
+          </span>
+        )}
         {offGrid.length > 0 && (
           <span>Not on the grid: {offGrid.join(", ")}</span>
         )}

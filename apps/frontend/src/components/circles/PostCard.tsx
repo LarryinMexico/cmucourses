@@ -14,7 +14,8 @@ import { Card } from "~/components/Card";
 import Link from "~/components/Link";
 import { Pill, TagRow } from "~/components/CourseTags";
 import { useDeletePost, useReactToPost } from "~/app/api/social";
-import { useFetchCourseInfos } from "~/app/api/course";
+import { useCourseInfosStatus } from "~/app/api/course";
+import InlineConfirm from "~/components/InlineConfirm";
 import {
   displayUnits,
   isValidUnits,
@@ -53,7 +54,7 @@ const PostCard = ({
   const [showComments, setShowComments] = useState(false);
   const react = useReactToPost();
   const remove = useDeletePost();
-  const details = useFetchCourseInfos(
+  const { courses: details, isPending: detailsPending } = useCourseInfosStatus(
     post.courses.map((course) => course.courseID)
   );
   const { author } = post;
@@ -79,7 +80,9 @@ const PostCard = ({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-gray-800 text-lg">{author.displayName}</span>
+            <span className="min-w-0 wrap-anywhere text-gray-800 text-lg">
+              {author.displayName}
+            </span>
             {post.isMine ? (
               <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-800 text-xs">
                 Your post
@@ -99,15 +102,23 @@ const PostCard = ({
         </div>
         <div className="flex items-center gap-2">
           {post.isMine ? (
-            <button
-              type="button"
-              className="flex items-center gap-1 rounded px-2 py-1 text-gray-500 text-sm hover:bg-gray-50"
+            <InlineConfirm
+              question="Delete this post and its comments?"
+              confirmLabel="Delete"
               disabled={remove.isPending}
-              onClick={() => remove.mutate({ postId: post.postID })}
-            >
-              <TrashIcon className="h-4 w-4" />
-              Delete
-            </button>
+              onConfirm={() => remove.mutate({ postId: post.postID })}
+              trigger={(open) => (
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded px-2 py-1 text-gray-500 text-sm hover:bg-gray-50"
+                  disabled={remove.isPending}
+                  onClick={open}
+                >
+                  <TrashIcon className="h-4 w-4" />
+                  Delete
+                </button>
+              )}
+            />
           ) : (
             <>
               {mutual && (
@@ -124,13 +135,16 @@ const PostCard = ({
                 profileID={author.profileID}
                 following={post.following}
                 followsMe={post.followsMe}
+                displayName={author.displayName}
               />
             </>
           )}
         </div>
       </div>
 
-      {author.bio && <p className="mt-2 text-gray-600 text-sm">{author.bio}</p>}
+      {author.bio && (
+        <p className="mt-2 wrap-anywhere text-gray-600 text-sm">{author.bio}</p>
+      )}
       <div className="mt-2 space-y-1">
         <TagRow
           ids={author.careers}
@@ -185,7 +199,10 @@ const PostCard = ({
         ))}
       </ul>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-gray-500 text-xs">
-        <span>{totalUnits > 0 ? `${totalUnits} units total` : ""}</span>
+        <span>
+          {/* A partial total while details load would be wrong, so wait. */}
+          {!detailsPending && totalUnits > 0 ? `${totalUnits} units total` : ""}
+        </span>
         {shared.length > 0 && (
           <span className="flex flex-wrap items-center gap-1">
             Courses you share:

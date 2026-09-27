@@ -1,5 +1,7 @@
 import { parseCatalogTime, type PostBusyBlock } from "@cmucourses/profile";
 import type { ScheduleMeeting } from "./scheduleSharing";
+import type { Course } from "./types";
+import { sessionToString } from "./utils";
 
 /** The week grid on Circles posts spans Mon-Fri, 8:00 to 22:00 (minutes after midnight). */
 export const GRID_START = 8 * 60;
@@ -17,6 +19,9 @@ export interface GridBlock {
   title: string;
   subtitle: string | null;
   color: string | null;
+  /** Side-by-side placement when blocks overlap: column `col` of `cols` (0-based). */
+  col: number;
+  cols: number;
 }
 
 const span = GRID_END - GRID_START;
@@ -66,6 +71,8 @@ export const layoutWeek = (
         title: meeting.courseID,
         subtitle: meeting.label,
         color: colors[meeting.courseID] ?? null,
+        col: 0,
+        cols: 1,
       });
     }
   }
@@ -80,8 +87,66 @@ export const layoutWeek = (
       title: block.label ?? "Busy",
       subtitle: null,
       color: null,
+      col: 0,
+      cols: 1,
     });
   }
 
+  assignColumns(blocks);
   return { blocks, offGrid };
 };
+
+/**
+ * Overlapping blocks on the same day would paint over each other. Per day, blocks that overlap
+ * (directly or through a chain) form a group; each takes the lowest column free at its start, and
+ * every block in the group shares the group's column count.
+ */
+const assignColumns = (blocks: GridBlock[]) => {
+  for (const day of GRID_DAYS) {
+    const sorted = blocks
+      .filter((b) => b.day === day)
+      .sort((a, b) => a.top - b.top || b.height - a.height);
+    let group: GridBlock[] = [];
+    let groupEnd = -1;
+    let columnEnds: number[] = [];
+    const close = () => {
+      for (const b of group) b.cols = columnEnds.length;
+      group = [];
+      columnEnds = [];
+    };
+    for (const block of sorted) {
+      if (group.length > 0 && block.top >= groupEnd) close();
+      let col = columnEnds.findIndex((end) => end <= block.top);
+      if (col === -1) col = columnEnds.length;
+      columnEnds[col] = block.top + block.height;
+      block.col = col;
+      group.push(block);
+      groupEnd = Math.max(groupEnd, block.top + block.height);
+    }
+    if (group.length > 0) close();
+  }
+};
+
+/**
+ * Courses on a post that produced no meetings at all, with why, so they are named under the grid
+ * instead of silently missing. A course whose details have not arrived yet is left out.
+ */
+export const unplacedCourses = (
+  courseIDs: string[],
+  details: Course[],
+  semester: string,
+  meetings: ScheduleMeeting[],
+  notFound: string[]
+): string[] =>
+  courseIDs.flatMap((id) => {
+    if (meetings.some((m) => m.courseID === id)) return [];
+    if (notFound.includes(id)) return [`${id} (not in the catalog)`];
+    const course = details.find((d) => d.courseID === id);
+    if (!course) return [];
+    const offered = (course.schedules ?? []).some(
+      (s) => sessionToString(s) === semester
+    );
+    return [
+      offered ? `${id} (no section picked)` : `${id} (not offered ${semester})`,
+    ];
+  });

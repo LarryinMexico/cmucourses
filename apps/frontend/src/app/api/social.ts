@@ -90,10 +90,13 @@ export const useFeed = (filter: FeedFilter) => {
 const useRefreshSocial = () => {
   const { userId } = useAuth();
   const queryClient = useQueryClient();
-  return () => {
-    void queryClient.invalidateQueries({ queryKey: [FEED_KEY, userId] });
-    void queryClient.invalidateQueries({ queryKey: [DIRECTORY_KEY, userId] });
-  };
+  // Returned so a mutation stays pending until the fresh data is in; otherwise a Follow button
+  // re-enables still reading "Follow" and a reaction un-highlights for a moment.
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: [FEED_KEY, userId] }),
+      queryClient.invalidateQueries({ queryKey: [DIRECTORY_KEY, userId] }),
+    ]);
 };
 
 const useSocialMutation = <T extends object>(
@@ -112,7 +115,7 @@ const useSocialMutation = <T extends object>(
         await axios.delete(url, { data: { token, ...input } });
       else await axios.patch(url, { token, ...input });
     },
-    onSuccess: refresh,
+    onSuccess: () => refresh(),
     onError: toastError(fallback),
   });
 };
@@ -167,12 +170,13 @@ const useCommentMutation = <T extends { postId: string }>(
       if (!token) throw new Error("Not signed in");
       await send(backendUrl(), token, input);
     },
-    onSuccess: (_data, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: [COMMENTS_KEY, userId, input.postId],
-      });
-      refresh(); // comment counts
-    },
+    onSuccess: (_data, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [COMMENTS_KEY, userId, input.postId],
+        }),
+        refresh(), // comment counts
+      ]),
     onError: toastError("Couldn't update comments. Please try again."),
   });
 };

@@ -1,4 +1,4 @@
-import { GRID_END, GRID_START, layoutWeek } from "./weekGrid";
+import { GRID_END, GRID_START, layoutWeek, unplacedCourses } from "./weekGrid";
 
 const meeting = (
   courseID: string,
@@ -72,5 +72,85 @@ describe("layoutWeek", () => {
       "99-000 Lec 1 (Sat 10:00AM)",
       "97-000 Lec 1 (Mon 11:00PM)",
     ]);
+  });
+});
+
+describe("layoutWeek columns for overlapping blocks", () => {
+  const cols = (blocks: { title: string; col: number; cols: number }[]) =>
+    Object.fromEntries(blocks.map((b) => [b.title, [b.col, b.cols]]));
+
+  it("a block that overlaps nothing takes the whole width", () => {
+    const { blocks } = layoutWeek(
+      [meeting("15-213", [1], "10:00AM", "10:50AM")],
+      [],
+      {}
+    );
+    expect(cols(blocks)).toEqual({ "15-213": [0, 1] });
+  });
+
+  it("two overlapping blocks sit side by side", () => {
+    const { blocks } = layoutWeek(
+      [meeting("15-213", [1], "10:00AM", "10:50AM")],
+      [{ day: 1, begin: 630, end: 690, label: "Work" }],
+      {}
+    );
+    expect(cols(blocks)).toEqual({ "15-213": [0, 2], Work: [1, 2] });
+  });
+
+  it("a chain where only neighbours overlap shares one group and reuses a free column", () => {
+    const { blocks } = layoutWeek(
+      [
+        meeting("A", [1], "09:00AM", "10:00AM"),
+        meeting("B", [1], "09:30AM", "10:30AM"),
+        meeting("C", [1], "10:15AM", "11:00AM"),
+      ],
+      [],
+      {}
+    );
+    expect(cols(blocks)).toEqual({ A: [0, 2], B: [1, 2], C: [0, 2] });
+  });
+
+  it("blocks on different days never share columns", () => {
+    const { blocks } = layoutWeek(
+      [
+        meeting("A", [1], "09:00AM", "10:00AM"),
+        meeting("B", [2], "09:00AM", "10:00AM"),
+      ],
+      [],
+      {}
+    );
+    expect(cols(blocks)).toEqual({ A: [0, 1], B: [0, 1] });
+  });
+});
+
+describe("unplacedCourses", () => {
+  const withFall = (courseID: string) => ({
+    courseID,
+    schedules: [
+      { courseID, year: 2026, semester: "fall", lectures: [], sections: [] },
+    ],
+  });
+
+  it("names courses that produced no meetings, and why", () => {
+    const entries = unplacedCourses(
+      ["95-867", "15-213", "21-127", "15-122"],
+      [
+        withFall("15-213"),
+        { courseID: "21-127", schedules: [] },
+        withFall("15-122"),
+      ] as never,
+      "Fall 2026",
+      [meeting("15-122", [1], "10:00AM", "10:50AM")],
+      ["95-867"]
+    );
+    expect(entries).toEqual([
+      "95-867 (not in the catalog)",
+      "15-213 (no section picked)",
+      "21-127 (not offered Fall 2026)",
+    ]);
+  });
+
+  it("says nothing about a course whose details are still unknown", () => {
+    expect(unplacedCourses(["15-213"], [], "Fall 2026", [], [])).toEqual([]);
   });
 });

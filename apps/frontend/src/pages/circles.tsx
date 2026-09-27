@@ -1,6 +1,7 @@
 import type { NextPage } from "next";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
+import type { ParsedUrlQuery } from "querystring";
 import { SignInButton, useAuth } from "@clerk/nextjs";
 import { EyeSlashIcon } from "@heroicons/react/24/outline";
 import type { CirclePost, SocialDirectoryProfile } from "@cmucourses/profile";
@@ -9,7 +10,11 @@ import { Card } from "~/components/Card";
 import Link from "~/components/Link";
 import { useFetchProfile } from "~/app/api/profile";
 import { useFeed, useSocialDirectory, type FeedFilter } from "~/app/api/social";
+import { useConversations } from "~/app/api/messages";
+import { unreadTotal } from "~/app/circles";
 import { classNames } from "~/app/utils";
+import Loading from "~/components/Loading";
+import { PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
 import PostCard from "~/components/circles/PostCard";
 import ProfileCard from "~/components/circles/ProfileCard";
 import ShareCard from "~/components/circles/ShareCard";
@@ -30,6 +35,12 @@ const FEED_FILTERS: { id: FeedFilter; label: string }[] = [
   { id: "mine", label: "My posts" },
 ];
 
+const withoutDm = (query: ParsedUrlQuery) => {
+  const next = { ...query };
+  delete next.dm;
+  return next;
+};
+
 const ErrorLine = ({ what, retry }: { what: string; retry: () => void }) => (
   <div className="text-gray-500 text-sm">
     Couldn&apos;t load {what}.{" "}
@@ -41,19 +52,27 @@ const ErrorLine = ({ what, retry }: { what: string; retry: () => void }) => (
 
 /** The feed, a page at a time: the next page loads when the bottom comes into view. */
 const Feed = ({
+  filter,
+  setFilter,
   ownCourses,
   ownInterests,
   onMessage,
 }: {
+  filter: FeedFilter;
+  setFilter: (filter: FeedFilter) => void;
   ownCourses: ReadonlySet<string>;
   ownInterests: ReadonlySet<string>;
   onMessage: (post: CirclePost) => void;
 }) => {
-  const [filter, setFilter] = useState<FeedFilter>("all");
   const feed = useFeed(filter);
   const sentinel = useRef<HTMLDivElement>(null);
   const posts = feed.data?.pages.flatMap((page) => page.posts) ?? [];
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
+  const {
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    fetchNextPage,
+  } = feed;
 
   // The page scrolls inside Page's content column, not the window, so observe against the viewport.
   useEffect(() => {
@@ -63,13 +82,14 @@ const Feed = ({
       if (
         entries.some((e) => e.isIntersecting) &&
         hasNextPage &&
-        !isFetchingNextPage
+        !isFetchingNextPage &&
+        !isFetchNextPageError
       )
         void fetchNextPage();
     });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
   return (
     <div className="space-y-4">
@@ -91,7 +111,7 @@ const Feed = ({
           </button>
         ))}
       </div>
-      {feed.isError ? (
+      {feed.isError && posts.length === 0 ? (
         <ErrorLine what="the feed" retry={() => void feed.refetch()} />
       ) : feed.isPending ? (
         <div className="text-gray-400 text-sm">Loading posts…</div>
@@ -117,10 +137,22 @@ const Feed = ({
         ))
       )}
       <div ref={sentinel} />
+      {isFetchNextPageError && posts.length > 0 && (
+        <div className="text-center text-gray-500 text-sm">
+          Couldn&apos;t load more ·{" "}
+          <button
+            type="button"
+            className="text-gray-500 underline"
+            onClick={() => void fetchNextPage()}
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {isFetchingNextPage && (
         <div className="text-center text-gray-400 text-sm">Loading more…</div>
       )}
-      {!hasNextPage && posts.length > 0 && (
+      {!hasNextPage && !isFetchNextPageError && posts.length > 0 && (
         <div className="py-4 text-center text-gray-400 text-xs">
           You&apos;re all caught up.
         </div>
@@ -130,15 +162,31 @@ const Feed = ({
 };
 
 const CirclesContent = () => {
-  const { isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
   const { data: profile } = useFetchProfile();
   const directory = useSocialDirectory();
   const people = useMemo(() => directory.data?.people ?? [], [directory.data]);
   const me = directory.data?.me;
   const [tab, setTab] = useState<Tab>("feed");
-  const [openConversation, setOpenConversation] =
-    useState<OpenConversation | null>(null);
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
+  // Names for threads opened this visit; which thread is open lives in ?dm= so Back closes it.
+  const [opened, setOpened] = useState<OpenConversation | null>(null);
+  const conversations = useConversations();
+  const unread = unreadTotal(conversations.data);
+  const dm = typeof router.query.dm === "string" ? router.query.dm : null;
+  const listedDm = conversations.data?.find((c) => c.profileID === dm);
+  const openConversation: OpenConversation | null = !dm
+    ? null
+    : opened?.profileID === dm
+      ? opened
+      : listedDm
+        ? {
+            profileID: dm,
+            displayName: listedDm.displayName,
+            canSend: listedDm.canSend,
+          }
+        : null;
   const [studyPartnersOnly, setStudyPartnersOnly] = useState(false);
   const [similarInterestsOnly, setSimilarInterestsOnly] = useState(false);
 
@@ -149,14 +197,29 @@ const CirclesContent = () => {
   }, [router.query.tab]);
   const goTo = (next: Tab) => {
     setTab(next);
-    void router.replace({ query: { ...router.query, tab: next } }, undefined, {
+    const query = withoutDm(router.query);
+    void router.replace({ query: { ...query, tab: next } }, undefined, {
       shallow: true,
     });
     if (next === "messages") void directory.refetch(); // pick up a follow-back before chatting
   };
+  const openThread = (conversation: OpenConversation | null) => {
+    const query = withoutDm(router.query);
+    if (!conversation) {
+      void router.replace({ query }, undefined, { shallow: true });
+      return;
+    }
+    setOpened(conversation);
+    setTab("messages");
+    void router.push(
+      { query: { ...query, tab: "messages", dm: conversation.profileID } },
+      undefined,
+      { shallow: true }
+    );
+  };
   const openChat = (profileID: string, displayName: string) => {
-    setOpenConversation({ profileID, displayName, canSend: true });
-    goTo("messages");
+    void directory.refetch();
+    openThread({ profileID, displayName, canSend: true });
   };
 
   const ownCourses = useMemo(
@@ -186,12 +249,19 @@ const CirclesContent = () => {
         [...person.careers, ...person.skills].some((i) => ownInterests.has(i)))
     );
   };
+  const matching = people.filter(matches);
   const suggestions = people.filter((person) => !person.following).slice(0, 5);
 
+  if (!isLoaded) return <Loading />;
   if (!isSignedIn) {
     return (
-      <div className="mt-8 text-center text-gray-400">
-        <SignInButton /> to use Scotty Circles.
+      <div className="mt-8 text-center">
+        <SignInButton>
+          <button type="button" className={PRIMARY_BUTTON_CLASS}>
+            Sign in
+          </button>
+        </SignInButton>{" "}
+        <span className="text-gray-500">to use Scotty Circles.</span>
       </div>
     );
   }
@@ -216,13 +286,12 @@ const CirclesContent = () => {
         </div>
       )}
 
-      <div className="mb-4 flex gap-1 border-gray-200 border-b" role="tablist">
+      <div className="mb-4 flex gap-1 border-gray-200 border-b">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
-            role="tab"
-            aria-selected={tab === t.id}
+            aria-current={tab === t.id ? "page" : undefined}
             className={classNames(
               "-mb-px border-b-2 px-4 py-2 text-sm",
               tab === t.id
@@ -232,17 +301,23 @@ const CirclesContent = () => {
             onClick={() => goTo(t.id)}
           >
             {t.label}
+            {t.id === "messages" && unread > 0 ? ` (${unread})` : ""}
           </button>
         ))}
       </div>
 
       {tab === "messages" ? (
-        <MessagesPanel open={openConversation} onOpen={setOpenConversation} />
+        <MessagesPanel open={openConversation} onOpen={openThread} />
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-4">
+            <div className="lg:hidden">
+              <ShareCard myPosts={me?.posts ?? []} />
+            </div>
             {tab === "feed" ? (
               <Feed
+                filter={feedFilter}
+                setFilter={setFeedFilter}
                 ownCourses={ownCourses}
                 ownInterests={ownInterests}
                 onMessage={(post) =>
@@ -280,15 +355,17 @@ const CirclesContent = () => {
                   />
                 ) : directory.isPending ? (
                   <div className="text-gray-400 text-sm">Loading people…</div>
-                ) : people.filter(matches).length === 0 ? (
+                ) : matching.length === 0 ? (
                   <div className="text-gray-400 text-sm">
-                    {people.length > 0
-                      ? "No one matches these filters."
-                      : "No one to show yet. People appear here once they make a profile section public or share a schedule."}
+                    {studyPartnersOnly && ownCourses.size === 0
+                      ? "Add courses on your Profile to find study partners."
+                      : people.length > 0
+                        ? "No one matches these filters."
+                        : "No one to show yet. People appear here once they make a profile section public or share a schedule."}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {people.filter(matches).map((person) => (
+                    {matching.map((person) => (
                       <ProfileCard
                         key={person.profileID}
                         person={person}
@@ -302,7 +379,7 @@ const CirclesContent = () => {
               </div>
             )}
           </div>
-          <aside className="space-y-4">
+          <aside className="hidden space-y-4 lg:block">
             <ShareCard myPosts={me?.posts ?? []} />
             {suggestions.length > 0 && (
               <Card>
@@ -319,13 +396,14 @@ const CirclesContent = () => {
                         </div>
                         <div className="truncate text-gray-500 text-xs">
                           {person.academicSummary ??
-                            `${person.postCount} posts`}
+                            `${person.postCount} ${person.postCount === 1 ? "post" : "posts"}`}
                         </div>
                       </div>
                       <FollowButton
                         profileID={person.profileID}
                         following={person.following}
                         followsMe={person.followsMe}
+                        displayName={person.displayName}
                       />
                     </li>
                   ))}
