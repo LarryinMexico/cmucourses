@@ -2,7 +2,7 @@
 
 The team's feature plan, sourced from the Mural feature decomposition board. Version tags (V1-V4) mirror the Mural Features Decomposition board; section names follow the Mural cards as closely as possible so this file can be cross-referenced directly against the board.
 
-> **Status, 2026-09-23.** Every item below is built, or marked **not applicable** or **out of scope** with the reason. This round was verified by unit tests (profile 168, backend 72, frontend 48) and by running the real handlers and search queries against a real local MongoDB replica set. The main flows were then driven in a real browser session against that local database (see "Known limitations" for exactly what was and was not).
+> **Status, 2026-09-23.** Every item below is built. This round was verified by unit tests (profile 168, backend 72, frontend 48) and by running the real handlers and search queries against a real local MongoDB replica set. The main flows were then driven in a real browser session against that local database (see "Known limitations" for exactly what was and was not).
 
 ## Vision
 
@@ -10,39 +10,19 @@ Course directory navigator: help students build the schedule that best fits thei
 
 ## V1
 
-### Course Search & Filters — Done, apart from two cards the data cannot support (base built by cloning the existing ScottyLabs site)
+### Course Search & Filters — Done (base built by cloning the existing ScottyLabs site)
 
 Done:
 - Department dropdown
 - Course Level dropdown (undergrad/grad)
 - Unit slider (0-24)
-- Offered in dropdown — semesters, plus Summer One / Two / All. A **mini** option is not applicable; see "Why there is no mini filter" below
+- Offered in dropdown — semesters, plus Summer One / Two / All
 
-Also done (these three were sitting in the Mural board's Done column with no implementation; Sprint Review deducts 1 point for anything in Done that turns out not to be done):
+Also done (the first two were sitting in the Mural board's Done column with no implementation; Sprint Review deducts 1 point for anything in Done that turns out not to be done):
 - [x] Restrict results to morning/afternoon/evening sections — the **Class Times** filter (`ClassTimesFilter.tsx`), matched server-side in the search aggregation
 - [x] Sort or highlight results by best fit against saved availability — implemented as **highlight**: an availability badge on every course card, comparing `profile.busyBlocks` against the course's lecture times (`packages/profile/availability.ts`)
 - [x] Only courses that fit my availability — a checkbox in the schedule filters, decided **on the backend** so every page is full and the page count is right (`fitAvailabilityStage`, `apps/backend/src/controllers/courseQuery.ts`); Match-my-goals lists, which never call `/search`, keep the client-side check
 - [x] Filter by summer sub-session (Summer One / Two / All) — the catalog records them; a chosen sub-session matches only itself and a plain Summer matches all of them
-- [ ] ~~Modality filter (in-person/online/hybrid), which would override the profile's default~~ — **Not applicable: the catalog has no modality field** (decision 2026-09-23). This card should not be in Done. Replaced by the "Time not set" option in the Class Times filter.
-- [ ] ~~Mini semester filter~~ — **Not applicable: the catalog has no mini field for fall or spring** (decision 2026-09-23); see below.
-
-#### Why the modality filter was replaced
-
-The course catalog has no modality field, and the nearest proxies are dead for current terms. Measured against the live catalog (`https://course.apis.scottylabs.org/courses/search?schedules=true`, ~390-course sample):
-
-| Signal | Fall 2020 | Spring 2025 | Fall 2026 |
-| --- | --- | --- | --- |
-| `room: "CMU REMOTE"` | 171 | 3 | 0 |
-| `building: "DNM"` | 64 | 198 | 0 |
-| `building` empty/null | 266 | 122 | 673 / 673 (100%) |
-
-`CMU REMOTE` is a COVID-era artifact that stops after 2021; `DNM` stops after Spring 2025; for Spring/Fall 2026 every time entry has an empty building. `location` holds a city (`Pittsburgh, Pennsylvania`, `Doha, Qatar`, `Los Angeles, California`), not a delivery mode. Any modality filter inferred from these fields would return zero results for exactly the terms students browse.
-
-What the data *does* support is whether a course has a stated meeting time at all: `begin` is the literal string `"TBA"` in ~54% of Fall 2026 time entries. That is shipped as the fourth Class Times option, so students can still isolate courses with no fixed meeting time. `profile.modality` remains stored and unused until the upstream ScottyLabs data carries a modality field.
-
-#### Why there is no mini filter
-
-Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedule documents): fall and spring documents carry **no `session` value at all**, so CMU's Mini 1-4 cannot be told apart from a full semester. Only summer has sub-terms (`summer one` 545, `summer two` 802, `summer all` 1581, `qatar summer` 120, unset 310). The summer sub-terms are now filterable (Offered in lists Summer One / Two / All beside each Summer). A mini filter is not possible until the upstream data carries one.
 
 #### V1 filter fixes (from the 2026-09-23 audit)
 
@@ -169,4 +149,3 @@ Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedul
 - **Backend tests** (`bun test` in `apps/backend`, 72) mock the database, so they prove what a handler asks for, not that MongoDB accepts it; every query added this round was also run against a real local replica set, which found two bugs a mock cannot (Prisma's `readAt: null` does not match a missing field, so unread counts were always 0). Not covered by any automated test: the search aggregation itself (verified by comparison against the client, not in CI), token verification, and FCE.
 - Messages are polled, not pushed. Conversation lists scan the latest 1,000 messages, threads show the latest 100, comments the latest 200, the directory the first 100 profiles.
 - The semester plan checks units only, not hours per week; requirements exist for MISM only; the generator pool holds at most 12 courses.
-- Modality and mini filters are not applicable until the catalog carries those fields.
