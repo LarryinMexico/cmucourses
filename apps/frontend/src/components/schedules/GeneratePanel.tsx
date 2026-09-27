@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { emptyProfile, LIMITS } from "@cmucourses/profile";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import { useFetchCourseInfos } from "~/app/api/course";
@@ -27,6 +28,7 @@ import {
   Pill,
   PRIMARY_BUTTON_CLASS,
 } from "~/components/profile/fields";
+import { planApply } from "~/app/planApply";
 import CandidateCard, { sameRef } from "./CandidateCard";
 
 const describeRef = (ref: SectionRef) =>
@@ -43,7 +45,12 @@ const describeRef = (ref: SectionRef) =>
  */
 const GeneratePanel = () => {
   const dispatch = useAppDispatch();
-  const scheduled = useAppSelector(selectCoursesInActiveSchedule);
+  const { isSignedIn } = useAuth();
+  const allScheduled = useAppSelector(selectCoursesInActiveSchedule);
+  // Pool courses the applied option added. The panel works from the schedule without them, so
+  // applying does not reset the options, and applying another option swaps them out.
+  const [appliedAdds, setAppliedAdds] = useState<string[]>([]);
+  const scheduled = allScheduled.filter((id) => !appliedAdds.includes(id));
   const selectedSession = useAppSelector(selectSessionInActiveSchedule);
   const scheduledKey = scheduled.join(",");
   const courseDetails = useFetchCourseInfos(scheduled);
@@ -96,6 +103,7 @@ const GeneratePanel = () => {
   useEffect(() => {
     setCandidates(null);
     setAppliedIndex(null);
+    setAppliedAdds([]);
   }, [selectedSession, scheduledKey, poolKey]);
 
   // Section names only mean something within one semester's schedule, so a new semester clears
@@ -162,12 +170,15 @@ const GeneratePanel = () => {
         courseSessions[pick.courseID]!,
       ])
     );
+    const plan = planApply(
+      scheduled,
+      appliedAdds,
+      candidate.picks.map((pick) => pick.courseID)
+    );
     dispatch(
       userSchedulesSlice.actions.applyGeneratedSchedule({
         courseSessions: placed,
-        addCourses: candidate.picks
-          .map((pick) => pick.courseID)
-          .filter((id) => !scheduled.includes(id)),
+        ...plan,
         generated: {
           option: index + 1,
           score: candidate.totalScore,
@@ -176,7 +187,13 @@ const GeneratePanel = () => {
       })
     );
     setAppliedIndex(index);
+    setAppliedAdds(plan.addCourses);
   };
+
+  const unitsInvalid =
+    shownUnits.min !== null &&
+    shownUnits.max !== null &&
+    shownUnits.min > shownUnits.max;
 
   return (
     <div className="mt-4">
@@ -191,7 +208,7 @@ const GeneratePanel = () => {
         </div>
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-baseline gap-2 text-gray-500 text-sm">
+          <div className="mb-2 flex flex-wrap items-baseline gap-2 text-gray-500 text-sm">
             <label htmlFor="generate-count">Options</label>
             <select
               id="generate-count"
@@ -205,7 +222,9 @@ const GeneratePanel = () => {
                 </option>
               ))}
             </select>
-            <span className="ml-2">Units</span>
+          </div>
+          <div className="mb-3 flex flex-wrap items-baseline gap-2 text-gray-500 text-sm">
+            <span>Units</span>
             <OptionalNumberInput
               value={shownUnits.min}
               min={0}
@@ -219,6 +238,11 @@ const GeneratePanel = () => {
               max={LIMITS.units}
               onChange={(max) => setUnitsRange({ ...shownUnits, max })}
             />
+            {unitsInvalid && (
+              <span className="basis-full text-red-700 text-xs">
+                The minimum is above the maximum.
+              </span>
+            )}
           </div>
           <div className="mb-3 space-y-1 text-gray-500 text-sm">
             <label className="flex items-center gap-2">
@@ -229,15 +253,17 @@ const GeneratePanel = () => {
               />
               Also consider my Saved courses ({notScheduled(saved).length})
             </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={includePlanned}
-                onChange={(e) => setIncludePlanned(e.target.checked)}
-              />
-              Also consider courses planned for this semester (
-              {notScheduled(plannedIDs).length})
-            </label>
+            {isSignedIn && (
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includePlanned}
+                  onChange={(e) => setIncludePlanned(e.target.checked)}
+                />
+                Also consider courses planned for this semester (
+                {notScheduled(plannedIDs).length})
+              </label>
+            )}
             {pool.cut > 0 && (
               <div className="text-gray-400 text-xs">
                 Only {MAX_POOL} are considered; {pool.cut} left out.
@@ -278,7 +304,7 @@ const GeneratePanel = () => {
             type="button"
             className={`${PRIMARY_BUTTON_CLASS} w-full`}
             onClick={generate}
-            disabled={loading}
+            disabled={loading || unitsInvalid}
           >
             {loading
               ? "Loading course data…"
@@ -299,7 +325,9 @@ const GeneratePanel = () => {
           ) : (
             candidates.map((candidate, index) => (
               <CandidateCard
-                key={index}
+                key={candidate.picks
+                  .map((p) => `${p.courseID}:${p.lecture}:${p.section}`)
+                  .join("|")}
                 candidate={candidate}
                 index={index}
                 locks={locks}

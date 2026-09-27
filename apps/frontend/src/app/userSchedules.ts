@@ -304,11 +304,18 @@ export const userSchedulesSlice = createSlice({
       action: PayloadAction<{
         courseSessions: CourseSessions;
         addCourses: string[];
+        /** Pool courses an earlier applied option added that this one leaves out. */
+        removeCourses?: string[];
         generated: GeneratedMeta;
       }>
     ) => {
       const schedule = getActiveSchedule(state);
       if (!schedule) return;
+      for (const courseID of action.payload.removeCourses ?? []) {
+        schedule.courses = removeFromSet(schedule.courses, courseID);
+        schedule.selected = removeFromSet(schedule.selected, courseID);
+        delete schedule.courseSessions[courseID];
+      }
       for (const courseID of action.payload.addCourses) {
         if (schedule.courses.includes(courseID)) continue;
         schedule.courses = addToSet(schedule.courses, courseID);

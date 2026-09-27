@@ -19,6 +19,31 @@ const start = (): UserSchedulesState => {
 const active = (state: UserSchedulesState) => state.saved[state.active!]!;
 
 describe("applyGeneratedSchedule", () => {
+  it("removes the pool courses an earlier option added before adding the new ones", () => {
+    let state = reducer(
+      start(),
+      actions.applyGeneratedSchedule({
+        courseSessions: {},
+        addCourses: ["21-127"],
+        generated: { option: 1, score: 50, reasons: [] },
+      })
+    );
+    state = reducer(
+      state,
+      actions.applyGeneratedSchedule({
+        courseSessions: {},
+        addCourses: ["10-301"],
+        removeCourses: ["21-127"],
+        generated: { option: 2, score: 40, reasons: [] },
+      })
+    );
+    const schedule = active(state);
+    expect(schedule.courses).toEqual(["15-213", "95-703", "10-301"]);
+    expect(schedule.selected).not.toContain("21-127");
+    expect(schedule.courseSessions["21-127"]).toBeUndefined();
+    expect(schedule.courseSessions["95-703"]).toMatchObject({ Section: "D" });
+  });
+
   it("sets the new picks, keeps the others, adds pool courses and records which option", () => {
     const state = reducer(
       start(),
