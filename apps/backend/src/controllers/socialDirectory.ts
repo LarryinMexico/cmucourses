@@ -60,7 +60,7 @@ export const toPostAuthor = (profile: DirectoryProfileRow): PostAuthor => ({
           .join(" · ") || null
       : null,
   careers: profile.visibility.careers === "PUBLIC" ? profile.careers : [],
-  skills: profile.visibility.skills === "PUBLIC" ? [...profile.skillsHave, ...profile.skillsWant] : [],
+  skills: profile.visibility.skills === "PUBLIC" ? [...new Set([...profile.skillsHave, ...profile.skillsWant])] : [],
   currentCourseIDs:
     profile.visibility.courses === "PUBLIC"
       ? profile.courses.filter((course) => course.status === "IN_PROGRESS").map((course) => course.courseID)

@@ -61,6 +61,17 @@ describe("toPostAuthor", () => {
     expect(JSON.stringify(author)).not.toContain("user_them");
   });
 
+  test("a skill both had and wanted is listed once", () => {
+    const author = toPostAuthor(
+      row({
+        visibility: { academic: "PRIVATE", careers: "PRIVATE", skills: "PUBLIC", courses: "PRIVATE" },
+        skillsHave: ["python"],
+        skillsWant: ["python", "ml"],
+      })
+    );
+    expect(author.skills).toEqual(["python", "ml"]);
+  });
+
   test("falls back to a generic name", () => {
     expect(toPostAuthor(row({ displayName: null })).displayName).toBe("CMU student");
   });
