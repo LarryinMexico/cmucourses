@@ -180,3 +180,29 @@ describe("resetForUser", () => {
     expect(claimed.saved).toEqual(legacy.saved);
   });
 });
+
+describe("saved copies", () => {
+  const withSavedId = (savedId: string) => {
+    let state = reducer(start(), actions.setActiveScheduleSavedId(savedId));
+    state = reducer(state, actions.createEmptySchedule());
+    state = reducer(state, actions.setActiveScheduleSavedId("other"));
+    return state;
+  };
+
+  it("renameSavedCopies renames every local schedule from that saved one", () => {
+    const state = reducer(
+      withSavedId("s1"),
+      actions.renameSavedCopies({ savedId: "s1", name: "Renamed" })
+    );
+    const names = Object.values(state.saved).map((s) => [s.savedId, s.name]);
+    expect(names).toContainEqual(["s1", "Renamed"]);
+    expect(names.find(([id]) => id === "other")?.[1]).not.toBe("Renamed");
+  });
+
+  it("clearSavedId unlinks every local schedule from a deleted saved one", () => {
+    const state = reducer(withSavedId("s1"), actions.clearSavedId("s1"));
+    const ids = Object.values(state.saved).map((s) => s.savedId);
+    expect(ids).not.toContain("s1");
+    expect(ids).toContain("other");
+  });
+});

@@ -24,19 +24,22 @@ import {
   PRIMARY_BUTTON_CLASS,
   SECONDARY_BUTTON_CLASS,
 } from "~/components/profile/fields";
+import InlineConfirm from "~/components/InlineConfirm";
 
 const SUMMER_SESSIONS = ["summer one", "summer two", "summer all"] as const;
 
 /** The builder's active schedule as the account copy would store it, or why it can't be saved yet. */
 export const toSavedInput = (
   schedule: UserSchedule,
-  name: string
+  name: string,
+  /** The saved copy it came from still exists; otherwise saving creates a new one. */
+  updating: boolean
 ): SavedScheduleInput | string => {
   const { semester, year, session } = schedule.session;
   if (semester === "" || !year) return "Pick a semester first";
   if (schedule.courses.length === 0) return "Add courses first";
   return {
-    ...(schedule.savedId ? { id: schedule.savedId } : {}),
+    ...(updating && schedule.savedId ? { id: schedule.savedId } : {}),
     name: name.trim() || schedule.name,
     semester,
     year,
@@ -88,18 +91,49 @@ const Row = ({
                 session: schedule.session,
                 courses: schedule.courses,
               },
-              { onSuccess: () => setRenaming(false) }
+              {
+                onSuccess: (result) => {
+                  dispatch(
+                    userSchedulesSlice.actions.renameSavedCopies({
+                      savedId: schedule.id,
+                      name: result.name,
+                    })
+                  );
+                  setRenaming(false);
+                },
+              }
             );
           }}
         >
           <input
-            className={`${INPUT_CLASS} flex-1`}
+            className={`${INPUT_CLASS} min-w-0 flex-1`}
             value={name}
             aria-label="Schedule name"
+            autoFocus
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setName(schedule.name);
+                setRenaming(false);
+              }
+            }}
           />
-          <button type="submit" className={SECONDARY_BUTTON_CLASS}>
+          <button
+            type="submit"
+            className={PRIMARY_BUTTON_CLASS}
+            disabled={save.isPending || name.trim() === ""}
+          >
             Save
+          </button>
+          <button
+            type="button"
+            className={SECONDARY_BUTTON_CLASS}
+            onClick={() => {
+              setName(schedule.name);
+              setRenaming(false);
+            }}
+          >
+            Cancel
           </button>
         </form>
       ) : (
@@ -135,16 +169,31 @@ const Row = ({
           >
             <PencilSquareIcon className="h-5 w-5" />
           </button>
-          <button
-            type="button"
-            title="Delete"
-            aria-label={`Delete ${schedule.name}`}
-            className="rounded p-1 text-gray-500 hover:bg-gray-50"
+          <InlineConfirm
+            question="Delete this saved schedule? Posts shared from it stay."
+            confirmLabel="Delete"
             disabled={remove.isPending}
-            onClick={() => remove.mutate(schedule.id)}
-          >
-            <TrashIcon className="h-5 w-5" />
-          </button>
+            onConfirm={() =>
+              remove.mutate(schedule.id, {
+                onSuccess: () =>
+                  dispatch(
+                    userSchedulesSlice.actions.clearSavedId(schedule.id)
+                  ),
+              })
+            }
+            trigger={(open) => (
+              <button
+                type="button"
+                title="Delete"
+                aria-label={`Delete ${schedule.name}`}
+                className="rounded p-1 text-gray-500 hover:bg-gray-50"
+                disabled={remove.isPending}
+                onClick={open}
+              >
+                <TrashIcon className="h-5 w-5" />
+              </button>
+            )}
+          />
         </div>
       )}
     </li>
@@ -162,9 +211,11 @@ const SavedSchedulesCard = () => {
 
   if (!isSignedIn) return null;
 
-  const input = active ? toSavedInput(active, name) : "Create a schedule first";
   const updating =
     !!active?.savedId && saved.some((s) => s.id === active.savedId);
+  const input = active
+    ? toSavedInput(active, name, updating)
+    : "Create a schedule first";
 
   return (
     <div className="mt-4">
@@ -184,7 +235,7 @@ const SavedSchedulesCard = () => {
         <button
           type="button"
           className={`${PRIMARY_BUTTON_CLASS} items-center gap-1`}
-          disabled={typeof input === "string" || save.isPending}
+          disabled={typeof input === "string" || save.isPending || isPending}
           title={typeof input === "string" ? input : undefined}
           onClick={() => {
             if (typeof input === "string") return;

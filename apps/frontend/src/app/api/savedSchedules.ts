@@ -2,7 +2,10 @@ import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SavedSchedule, SavedScheduleInput } from "@cmucourses/profile";
-import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/outline";
 import { showToast } from "~/components/Toast";
 import { backendUrl } from "~/app/api/social";
 
@@ -48,10 +51,12 @@ export const useSaveSchedule = () => {
       );
       return response.data;
     },
-    onSuccess: () =>
+    onSuccess: () => {
+      showToast({ message: "Saved", icon: CheckCircleIcon });
       void queryClient.invalidateQueries({
         queryKey: [SAVED_SCHEDULES_KEY, userId],
-      }),
+      });
+    },
     onError: (error) =>
       showToast({
         message: serverError(
@@ -74,10 +79,12 @@ export const useDeleteSavedSchedule = () => {
         data: { token, id },
       });
     },
-    onSuccess: () =>
+    onSuccess: () => {
+      showToast({ message: "Deleted", icon: CheckCircleIcon });
       void queryClient.invalidateQueries({
         queryKey: [SAVED_SCHEDULES_KEY, userId],
-      }),
+      });
+    },
     onError: (error) =>
       showToast({
         message: serverError(

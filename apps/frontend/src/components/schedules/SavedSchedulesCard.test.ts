@@ -22,7 +22,7 @@ const schedule = (over: Partial<UserSchedule> = {}): UserSchedule => ({
 
 describe("toSavedInput", () => {
   it("takes the semester, sub-session and picks; empty picks become null", () => {
-    expect(toSavedInput(schedule(), "  Plan A ")).toEqual({
+    expect(toSavedInput(schedule(), "  Plan A ", false)).toEqual({
       name: "Plan A",
       semester: "summer",
       year: "2026",
@@ -37,7 +37,8 @@ describe("toSavedInput", () => {
   it("falls back to the schedule's own name and updates the copy it came from", () => {
     const input = toSavedInput(
       schedule({ savedId: "64b7f0c2a1d3e4f5a6b7c8d9" }),
-      ""
+      "",
+      true
     );
     expect(input).toMatchObject({
       id: "64b7f0c2a1d3e4f5a6b7c8d9",
@@ -45,11 +46,24 @@ describe("toSavedInput", () => {
     });
   });
 
+  it("saves as new when the saved copy it came from is gone", () => {
+    const input = toSavedInput(
+      schedule({ savedId: "64b7f0c2a1d3e4f5a6b7c8d9" }),
+      "",
+      false
+    );
+    expect(input).not.toHaveProperty("id");
+  });
+
   it("explains what is missing instead of saving", () => {
     expect(
-      toSavedInput(schedule({ session: { year: "", semester: "" } }), "x")
+      toSavedInput(
+        schedule({ session: { year: "", semester: "" } }),
+        "x",
+        false
+      )
     ).toBe("Pick a semester first");
-    expect(toSavedInput(schedule({ courses: [] }), "x")).toBe(
+    expect(toSavedInput(schedule({ courses: [] }), "x", false)).toBe(
       "Add courses first"
     );
   });
@@ -59,7 +73,8 @@ describe("toSavedInput", () => {
       schedule({
         session: { year: "2026", semester: "summer", session: "qatar summer" },
       }),
-      "x"
+      "x",
+      false
     );
     expect(input).toMatchObject({ session: null });
   });

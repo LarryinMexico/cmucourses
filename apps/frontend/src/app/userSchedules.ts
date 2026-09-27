@@ -149,6 +149,22 @@ export const userSchedulesSlice = createSlice({
       if (!schedule) return;
       schedule.savedId = action.payload;
     },
+    /** A saved schedule was renamed on the account; its local copies follow. */
+    renameSavedCopies: (
+      state,
+      action: PayloadAction<{ savedId: string; name: string }>
+    ) => {
+      for (const schedule of Object.values(state.saved)) {
+        if (schedule.savedId === action.payload.savedId)
+          schedule.name = action.payload.name;
+      }
+    },
+    /** A saved schedule was deleted; its local copies become unsaved, so Save creates a new one. */
+    clearSavedId: (state, action: PayloadAction<string>) => {
+      for (const schedule of Object.values(state.saved)) {
+        if (schedule.savedId === action.payload) schedule.savedId = undefined;
+      }
+    },
     /**
      * Called whenever a signed-in account is known. A different account gets an empty builder;
      * a builder from before owners were recorded is kept for the first account that signs in.
