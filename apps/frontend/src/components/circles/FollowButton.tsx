@@ -29,7 +29,8 @@ export const FollowButton = ({
   return (
     <button
       type="button"
-      className={following ? SECONDARY_BUTTON_CLASS : PRIMARY_BUTTON_CLASS}
+      // Never wraps or shrinks: a narrow column squeezed "Follow back" onto two lines.
+      className={`${following ? SECONDARY_BUTTON_CLASS : PRIMARY_BUTTON_CLASS} shrink-0 whitespace-nowrap`}
       disabled={follow.isPending}
       title={following ? "Click to unfollow" : undefined}
       onClick={() => follow.mutate({ profileID, follow: !following })}
