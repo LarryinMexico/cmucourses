@@ -19,6 +19,7 @@ const ProgressBar = ({
       <div
         className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200"
         role="progressbar"
+        aria-label={label}
         aria-valuenow={value}
         aria-valuemin={0}
         aria-valuemax={max}

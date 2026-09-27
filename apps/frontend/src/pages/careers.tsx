@@ -72,16 +72,31 @@ const CareerProgressCard = ({ progress }: { progress: CareerProgress }) => (
 const YourProgress = () => {
   const { isSignedIn } = useAuth();
   const hasGoals = useHasProfileGoals();
-  const { data: profile } = useFetchProfile();
+  const { data: profile, isError, refetch } = useFetchProfile();
 
-  if (!isSignedIn || !hasGoals || !profile) {
+  const addGoals = (
+    <div className="mt-2 text-gray-400 text-sm">
+      <Link href="/profile">Add career goals on your Profile</Link> to see your
+      progress toward them here.
+    </div>
+  );
+  if (!isSignedIn) return addGoals;
+  if (isError && !profile) {
     return (
       <div className="mt-2 text-gray-400 text-sm">
-        <Link href="/profile">Add career goals on your Profile</Link> to see
-        your progress toward them here.
+        We couldn&apos;t load your profile.{" "}
+        <button
+          type="button"
+          className="text-blue-600 hover:underline"
+          onClick={() => void refetch()}
+        >
+          Try again
+        </button>
       </div>
     );
   }
+  if (!profile) return <Loading />;
+  if (!hasGoals) return addGoals;
 
   const progress = careerProgress({
     careers: profile.careers,
@@ -89,7 +104,13 @@ const YourProgress = () => {
     takenCourseIDs: profile.courses.map((course) => course.courseID),
   });
 
-  if (progress.length === 0) return null;
+  if (progress.length === 0) {
+    return (
+      <div className="mt-2 text-gray-400 text-sm">
+        <Link href="/profile">Add a career goal</Link> to see your progress.
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -169,22 +190,28 @@ const AlternativeAcademicPaths = () => {
 
   if (paths.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      {paths.map((path, index) => (
-        <Card key={index}>
-          <Card.Header>Path {index + 1}</Card.Header>
-          <p className="mt-1 text-gray-400 text-xs">
-            An alternative set of courses covering current career-skill gaps.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-x-2 text-sm">
-            {path.map((courseID) => (
-              <Link key={courseID} href={`/course/${courseID}`}>
-                {courseID}
-              </Link>
-            ))}
-          </div>
-        </Card>
-      ))}
+    <div>
+      <h1 className="text-gray-700 text-lg">Alternative academic paths</h1>
+      <p className="text-gray-400 text-sm">
+        Different course combinations that can close the same career-skill gaps.
+      </p>
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {paths.map((path, index) => (
+          <Card key={index}>
+            <Card.Header>Path {index + 1}</Card.Header>
+            <p className="mt-1 text-gray-400 text-xs">
+              An alternative set of courses covering current career-skill gaps.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-x-2 text-gray-700 text-sm">
+              {path.map((courseID) => (
+                <Link key={courseID} href={`/course/${courseID}`}>
+                  {courseID}
+                </Link>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 };
@@ -210,16 +237,7 @@ const CareersContent = () => {
           <AllCareerPaths />
         </div>
       </div>
-      <div>
-        <h1 className="text-gray-700 text-lg">Alternative academic paths</h1>
-        <p className="text-gray-400 text-sm">
-          Different course combinations that can close the same career-skill
-          gaps.
-        </p>
-        <div className="mt-3">
-          <AlternativeAcademicPaths />
-        </div>
-      </div>
+      <AlternativeAcademicPaths />
     </div>
   );
 };

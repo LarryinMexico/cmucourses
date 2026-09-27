@@ -19,10 +19,11 @@ const RateGate = ({
   targetType: RatingTargetType;
   targetID: string;
 }) => {
-  const { isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const { data: profile } = useFetchProfile();
   const { data: ownRating } = useFetchOwnRating(targetType, targetID);
 
+  if (!isLoaded) return null;
   if (!isSignedIn) {
     return (
       <div className="text-gray-400 text-sm">
@@ -33,9 +34,10 @@ const RateGate = ({
   }
 
   if (targetType === "COURSE") {
+    if (!profile) return null;
     const canonical = standardizeCourseID(targetID);
     const taken =
-      profile?.courses.some(
+      profile.courses.some(
         (c) =>
           standardizeCourseID(c.courseID) === canonical &&
           c.status === "TAKEN"

@@ -20,6 +20,7 @@ const StarPicker = ({
           key={n}
           type="button"
           aria-label={`${n} star${n === 1 ? "" : "s"}`}
+          aria-pressed={n === value}
           onClick={() => onChange(n)}
           className="text-yellow-500"
         >
@@ -149,7 +150,7 @@ const RatingForm = ({
         />
       </div>
       <textarea
-        className="w-full rounded border border-gray-200 p-2 text-sm"
+        className="w-full rounded border border-gray-200 p-2 text-gray-700 text-sm"
         rows={2}
         maxLength={RATING_LIMITS.comment}
         placeholder="Share your experience (optional)"
@@ -158,13 +159,18 @@ const RatingForm = ({
       />
       {targetType === "COURSE" && (
         <textarea
-          className="w-full rounded border border-gray-200 p-2 text-sm"
+          className="w-full rounded border border-gray-200 p-2 text-gray-700 text-sm"
           rows={2}
           maxLength={RATING_LIMITS.wishIKnew}
           placeholder="What do you wish you knew before taking this course? (optional)"
           value={wishIKnew}
           onChange={(e) => setWishIKnew(e.target.value)}
         />
+      )}
+      {stars === 0 && (
+        <div className="text-gray-400 text-xs">
+          Pick a star rating to submit.
+        </div>
       )}
       <button
         type="button"

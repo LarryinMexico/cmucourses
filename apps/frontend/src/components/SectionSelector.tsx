@@ -183,7 +183,7 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
             return (
               <div
                 key={courseID}
-                className="relative mb-4 p-3 rounded-md border border-gray-800 "
+                className="nightwind-prevent relative mb-4 rounded-md border border-gray-800 bg-white p-3"
                 style={{
                   backgroundColor:
                     selectedCourseSessions[courseID]?.Color || "",

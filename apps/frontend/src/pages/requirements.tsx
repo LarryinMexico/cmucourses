@@ -12,6 +12,7 @@ import {
 } from "@cmucourses/profile";
 import { Page } from "~/components/Page";
 import Loading from "~/components/Loading";
+import { unitsByCourse } from "~/app/planUnits";
 import Link from "~/components/Link";
 import { Card } from "~/components/Card";
 import ProgressBar from "~/components/ProgressBar";
@@ -165,11 +166,11 @@ const ElectiveUnits = ({
   let earned = 0;
   let variableCount = 0;
   for (const courseID of electiveCourseIDs) {
-    const units = courseByID.get(courseID)?.units;
-    if (units === undefined) continue; // still loading
-    const parsed = parseFloat(units);
-    if (Number.isNaN(parsed)) variableCount += 1;
-    else earned += parsed;
+    const course = courseByID.get(courseID);
+    if (!course) continue; // still loading
+    const units = unitsByCourse([course]).get(courseID);
+    if (units === null || units === undefined) variableCount += 1;
+    else earned += units;
   }
 
   return (
@@ -206,19 +207,26 @@ const GenericRequirementsPlanner = ({ profile }: { profile: Profile }) => {
   const details = useFetchCourseInfos([
     ...new Set([...recordedIDs, ...plannedIDs]),
   ]);
-  const unitsByID = new Map(
-    details.map((course) => [
-      course.courseID,
-      Number.isNaN(parseFloat(course.units)) ? 0 : parseFloat(course.units),
-    ])
+  // Variable units (VAR, "1-12", "3,5,9") are not summed; they are counted and noted instead.
+  const unitsByID = unitsByCourse(details);
+  const total = (ids: string[]) =>
+    ids.reduce(
+      (acc, id) => {
+        const units = unitsByID.get(id);
+        if (units === null) acc.variable += 1;
+        else acc.sum += units ?? 0;
+        return acc;
+      },
+      { sum: 0, variable: 0 }
+    );
+  const completed = total(
+    profile.courses
+      .filter((course) => course.status === "TAKEN")
+      .map((course) => course.courseID)
   );
-  const completedUnits = profile.courses
-    .filter((course) => course.status === "TAKEN")
-    .reduce((sum, course) => sum + (unitsByID.get(course.courseID) ?? 0), 0);
-  const plannedUnits = profile.plannedCourses.reduce(
-    (sum, course) => sum + (unitsByID.get(course.courseID) ?? 0),
-    0
-  );
+  const planned = total(profile.plannedCourses.map((c) => c.courseID));
+  const variableNote = (n: number) =>
+    n > 0 ? ` (${n} with variable units not counted)` : "";
   const programs = profile.academic?.majors ?? [];
 
   return (
@@ -233,11 +241,15 @@ const GenericRequirementsPlanner = ({ profile }: { profile: Profile }) => {
         <div className="mt-3 grid grid-cols-2 gap-3 text-gray-700 text-sm">
           <div className="rounded bg-gray-50 p-3">
             <div className="text-gray-400 text-xs">Completed</div>
-            <div>{completedUnits} catalog units</div>
+            <div>
+              {completed.sum} catalog units{variableNote(completed.variable)}
+            </div>
           </div>
           <div className="rounded bg-gray-50 p-3">
             <div className="text-gray-400 text-xs">Future plan</div>
-            <div>{plannedUnits} catalog units</div>
+            <div>
+              {planned.sum} catalog units{variableNote(planned.variable)}
+            </div>
           </div>
         </div>
         <p className="mt-3 text-gray-400 text-xs">
@@ -279,7 +291,7 @@ const GenericRequirementsPlanner = ({ profile }: { profile: Profile }) => {
 
 const RequirementsContent = () => {
   const { isLoaded, isSignedIn } = useAuth();
-  const { data: profile } = useFetchProfile();
+  const { data: profile, isError, refetch } = useFetchProfile();
 
   if (!isLoaded) return <Loading />;
 
@@ -292,6 +304,21 @@ const RequirementsContent = () => {
             <SignInButton />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (isError && !profile) {
+    return (
+      <div className="mt-6 text-center text-gray-400">
+        <p>We couldn&apos;t load your profile.</p>
+        <button
+          type="button"
+          className="mt-2 text-blue-600 hover:underline"
+          onClick={() => void refetch()}
+        >
+          Try again
+        </button>
       </div>
     );
   }
