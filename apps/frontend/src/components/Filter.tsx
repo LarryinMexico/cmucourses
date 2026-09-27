@@ -1,4 +1,5 @@
 import React from "react";
+import { isEqual } from "lodash-es";
 import { useAuth } from "@clerk/nextjs";
 import { filtersSlice } from "~/app/filters";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
@@ -22,50 +23,58 @@ const LINK_BUTTON_CLASS =
 const DefaultFilterControls = () => {
   const { isSignedIn, userId } = useAuth();
   const { data: profile } = useFetchProfile();
-  const update = useUpdateProfile();
+  const save = useUpdateProfile();
+  const clear = useUpdateProfile();
   const dispatch = useAppDispatch();
   const filters = useAppSelector((state) => state.filters);
   const matchGoals = useAppSelector((state) => state.ui.matchGoals);
   if (!isSignedIn) return null;
 
   const saved = profile?.savedFilters ?? null;
+  const current = filtersToSaved(filters, matchGoals);
+  const isDefault = !!saved && isEqual(saved, current);
+  const busy = save.isPending || clear.isPending;
 
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
-      <button
-        type="button"
-        className={LINK_BUTTON_CLASS}
-        disabled={update.isPending}
-        onClick={() => {
-          markDefaultFiltersApplied(userId);
-          update.mutate({ savedFilters: filtersToSaved(filters, matchGoals) });
-        }}
-      >
-        {update.isSuccess && !update.isPending
-          ? "Saved as default"
-          : "Save as default"}
-      </button>
-      <button
-        type="button"
-        className={LINK_BUTTON_CLASS}
-        disabled={!saved}
-        onClick={() => {
-          if (!saved) return;
-          dispatch(filtersSlice.actions.applySavedFilters(saved));
-          dispatch(uiSlice.actions.setMatchGoals(saved.matchGoals));
-        }}
-      >
-        Use my default
-      </button>
-      {saved && (
+    <div className="mb-4">
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className={`${LINK_BUTTON_CLASS} col-span-2`}
+          disabled={busy || isDefault}
+          onClick={() => {
+            markDefaultFiltersApplied(userId);
+            save.mutate({ savedFilters: current });
+          }}
+        >
+          {isDefault ? "Saved as default" : "Save as default"}
+        </button>
         <button
           type="button"
           className={LINK_BUTTON_CLASS}
-          disabled={update.isPending}
-          onClick={() => update.mutate({ savedFilters: null })}
+          disabled={!saved}
+          title={profile && !saved ? "No default saved yet" : undefined}
+          onClick={() => {
+            if (!saved) return;
+            dispatch(filtersSlice.actions.applySavedFilters(saved));
+            dispatch(uiSlice.actions.setMatchGoals(saved.matchGoals));
+          }}
         >
-          Clear default
+          Use my default
         </button>
+        {saved && (
+          <button
+            type="button"
+            className={LINK_BUTTON_CLASS}
+            disabled={busy}
+            onClick={() => clear.mutate({ savedFilters: null })}
+          >
+            Clear default
+          </button>
+        )}
+      </div>
+      {profile && !saved && (
+        <div className="mt-1 text-gray-400 text-xs">No default saved yet</div>
       )}
     </div>
   );

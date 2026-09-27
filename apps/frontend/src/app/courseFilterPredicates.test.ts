@@ -193,3 +193,42 @@ describe("courseMatchesClientFilters", () => {
     });
   });
 });
+
+describe("catalog filters for Match-my-goals lists", () => {
+  const match = (over: Partial<Course>, filters: object) =>
+    courseMatchesClientFilters({ ...course(), ...over }, filters, []);
+
+  it("departments: the course's department must be chosen", () => {
+    expect(match({}, { departments: ["Computer Science"] })).toBe(true);
+    expect(match({}, { departments: ["Mathematical Sciences"] })).toBe(false);
+  });
+
+  it("levels: the hundreds digit of the course number", () => {
+    expect(match({}, { levels: [2] })).toBe(true);
+    expect(match({}, { levels: [1, 3] })).toBe(false);
+  });
+
+  it("units: a single value, any value of a range or list, and variable units", () => {
+    const range = { units: { min: 9, max: 12 } };
+    expect(match({ units: "12" }, range)).toBe(true);
+    expect(match({ units: "6" }, range)).toBe(false);
+    expect(match({ units: "1-12" }, range)).toBe(true);
+    expect(match({ units: "3,5,9" }, range)).toBe(true);
+    expect(match({ units: "3,5" }, range)).toBe(false);
+    expect(match({ units: "VAR" }, range)).toBe(true);
+  });
+
+  it("classTimes: buckets by begin time, tba for an untimed meeting", () => {
+    expect(match({}, { classTimes: ["morning"] })).toBe(true);
+    expect(match({}, { classTimes: ["afternoon", "evening"] })).toBe(false);
+    const tba = course();
+    tba.schedules![0]!.lectures[0]!.times[0]!.begin = "TBA";
+    tba.schedules![0]!.lectures[0]!.times[0]!.end = "TBA";
+    expect(courseMatchesClientFilters(tba, { classTimes: ["tba"] }, [])).toBe(
+      true
+    );
+    expect(
+      courseMatchesClientFilters(tba, { classTimes: ["morning"] }, [])
+    ).toBe(false);
+  });
+});

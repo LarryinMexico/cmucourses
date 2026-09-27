@@ -9,6 +9,7 @@ import { FlushedButton } from "./Buttons";
 import { XMarkIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
 import { UserSchedule, userSchedulesSlice } from "~/app/userSchedules";
 import { showToast } from "./Toast";
+import InlineConfirm from "./InlineConfirm";
 import { useFetchCourseInfos } from "~/app/api/course";
 import {
   downloadScheduleICS,
@@ -31,17 +32,31 @@ const ScheduleSelection = ({ schedule, active }: ScheduleSelectionProps) => {
     );
   }, [schedule]);
 
+  const deleteButton = (
+    <InlineConfirm
+      question={`Delete ${name}?`}
+      confirmLabel="Delete"
+      onConfirm={() => dispatch(userSchedulesSlice.actions.deleteSchedule(id))}
+      trigger={(open) => (
+        <button
+          type="button"
+          aria-label={`Delete ${name}`}
+          title="Delete schedule"
+          className="shrink-0 rounded p-0.5 text-gray-500 hover:bg-gray-100"
+          onClick={open}
+        >
+          <XMarkIcon className="h-4 w-4" />
+        </button>
+      )}
+    />
+  );
+
   if (active)
     return (
       <div className="mt-1 mb-1 rounded p-2 text-sm bg-gray-50">
-        <div className="flex justify-between">
-          <div>{name}</div>
-          <XMarkIcon
-            className="h-4 w-4 cursor-pointer"
-            onClick={() =>
-              dispatch(userSchedulesSlice.actions.deleteSchedule(id))
-            }
-          />
+        <div className="flex justify-between gap-2">
+          <div className="min-w-0 truncate text-gray-700">{name}</div>
+          {deleteButton}
         </div>
         <div className="">
           <div className="mt-1 flex items-center">
@@ -95,20 +110,17 @@ const ScheduleSelection = ({ schedule, active }: ScheduleSelectionProps) => {
     );
   else
     return (
-      <div
-        className="flex cursor-pointer justify-between rounded px-2 py-2 text-sm hover:bg-gray-50"
-        onClick={() =>
-          dispatch(userSchedulesSlice.actions.changeActiveSchedule(id))
-        }
-      >
-        <div>{name}</div>
-        <XMarkIcon
-          className="h-4 w-4 cursor-pointer"
-          onClick={(e) => {
-            dispatch(userSchedulesSlice.actions.deleteSchedule(id));
-            e.stopPropagation();
-          }}
-        />
+      <div className="flex items-center justify-between gap-2 rounded px-2 py-2 text-sm hover:bg-gray-50">
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left text-gray-700"
+          onClick={() =>
+            dispatch(userSchedulesSlice.actions.changeActiveSchedule(id))
+          }
+        >
+          {name}
+        </button>
+        {deleteButton}
       </div>
     );
 };

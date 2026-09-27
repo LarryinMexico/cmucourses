@@ -13,16 +13,16 @@ const GoalsFilter = () => {
   return (
     <div className="mt-2 flex text-gray-500 text-sm">
       <div>
-        <input
-          type="checkbox"
-          className="mr-2"
-          checked={matchGoals && hasGoals}
-          disabled={!hasGoals}
-          onChange={() => dispatch(uiSlice.actions.toggleMatchGoals())}
-        />
-      </div>
-      <div>
-        <div>Match my goals</div>
+        <label className="flex items-center text-gray-500">
+          <input
+            type="checkbox"
+            className="mr-2"
+            checked={matchGoals && hasGoals}
+            disabled={!hasGoals}
+            onChange={() => dispatch(uiSlice.actions.toggleMatchGoals())}
+          />
+          Match my goals
+        </label>
         {!hasGoals && (
           <div className="text-gray-400 text-xs">
             <Link href="/profile">Add career goals on your Profile</Link> to use

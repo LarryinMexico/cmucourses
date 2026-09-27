@@ -120,7 +120,7 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
                   className={({ active }) => {
                     return classNames(
                       "relative cursor-pointer select-none py-2 pl-3 pr-9 focus:outline-none ",
-                      active ? "bg-indigo-600 text-gray-600" : "text-gray-900"
+                      active ? "bg-gray-100 text-gray-900" : "text-gray-900"
                     );
                   }}
                 >
@@ -191,8 +191,10 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
               >
                 <div className="flex justify-between text-lg text-gray-700 ">
                   {courseID} (Select {sessionType})
-                  <span
-                    className="cursor-pointer"
+                  <button
+                    type="button"
+                    aria-label={`Remove ${courseID}`}
+                    className="text-gray-700"
                     onClick={(e) => {
                       e.stopPropagation();
                       dispatch(
@@ -203,7 +205,7 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
                     }}
                   >
                     &#10005;
-                  </span>
+                  </button>
                 </div>
                 <div>
                   <RadioGroup

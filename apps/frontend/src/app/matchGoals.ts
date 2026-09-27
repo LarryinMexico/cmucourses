@@ -1,7 +1,11 @@
 import { useMemo } from "react";
 import { recommendCourses } from "@cmucourses/profile";
 import { useAppSelector } from "~/app/hooks";
-import { useFetchAllCourses } from "~/app/api/course";
+import { useCourseInfosStatus, useFetchAllCourses } from "~/app/api/course";
+import {
+  clientFiltersFromState,
+  courseMatchesClientFilters,
+} from "~/app/courseFilterPredicates";
 import { useFetchProfile, useHasProfileGoals } from "~/app/api/profile";
 
 const GOAL_LIST_LIMIT = 500;
@@ -62,6 +66,44 @@ export const useMatchGoalsCourseIDs = (): {
     ready:
       !active ||
       (!!profile && !profilePending && (!needsNames || !coursesPending)),
+    courseIDs,
+  };
+};
+
+/**
+ * The Match-my-goals list with every sidebar filter applied, in recommendation order. The whole
+ * list is fetched (one batched request; at most ~100 mapped courses) and filtered before paging,
+ * so the count, the pages and the rows agree.
+ */
+export const useFilteredGoalCourseIDs = (): {
+  active: boolean;
+  ready: boolean;
+  courseIDs: string[];
+} => {
+  const goals = useMatchGoalsCourseIDs();
+  const filters = useAppSelector((state) => state.filters);
+  const { data: profile, isPending: profilePending } = useFetchProfile();
+  const details = useCourseInfosStatus(goals.courseIDs);
+
+  const courseIDs = useMemo(() => {
+    // Skip availability while the profile loads so a rehydrated flag does not empty the list.
+    const client = clientFiltersFromState(
+      filters,
+      !profilePending && (filters.fitAvailability ?? false)
+    );
+    const byID = new Map(details.courses.map((c) => [c.courseID, c]));
+    return goals.courseIDs.filter((id) => {
+      const course = byID.get(id);
+      return (
+        !!course &&
+        courseMatchesClientFilters(course, client, profile?.busyBlocks ?? [])
+      );
+    });
+  }, [goals.courseIDs, details.courses, filters, profilePending, profile]);
+
+  return {
+    active: goals.active,
+    ready: goals.ready && !details.isPending,
     courseIDs,
   };
 };

@@ -15,7 +15,9 @@ import { CLASS_TIME_SHORT_LABELS } from "./filters/ClassTimesFilter";
 import { useSearchPage } from "~/app/availability";
 import { useAuth } from "@clerk/nextjs";
 import { usePostHog } from "posthog-js/react";
-import { useMatchGoalsCourseIDs } from "~/app/matchGoals";
+import { useFilteredGoalCourseIDs } from "~/app/matchGoals";
+import { useFetchProfile } from "~/app/api/profile";
+import { DAYS, minutesToTime } from "./profile/options";
 
 /** Extra idle time after Redux search updates (those already debounce 300ms) before sending PostHog. */
 const POSTHOG_COURSE_SEARCH_IDLE_MS = 750;
@@ -33,18 +35,21 @@ const AppliedFiltersPill = ({
   onDelete?: () => void;
   key: string;
 }) => {
+  const label = typeof children === "string" ? children : "filter";
   return (
     <div
       className={`${className} flex flex-initial items-center rounded py-1 px-2 text-sm`}
     >
       <span>{children}</span>
       {onDelete && (
-        <XMarkIcon
-          className="ml-2 h-3 w-3 cursor-pointer"
-          onClick={() => {
-            onDelete();
-          }}
-        />
+        <button
+          type="button"
+          aria-label={`Remove ${label}`}
+          className="ml-2"
+          onClick={onDelete}
+        >
+          <XMarkIcon className="h-3 w-3" />
+        </button>
       )}
     </div>
   );
@@ -54,6 +59,8 @@ const AppliedFilters = () => {
   const dispatch = useAppDispatch();
   const badges: JSX.Element[] = [];
   const filter = useAppSelector((state) => state.filters);
+  const { isSignedIn } = useAuth();
+  const { data: profile } = useFetchProfile();
 
   if (filter.departments.active) {
     filter.departments.names.forEach((department) => {
@@ -133,19 +140,69 @@ const AppliedFilters = () => {
     });
   }
 
+  if (filter.meetingDays?.active && filter.meetingDays.selected.length > 0) {
+    badges.push(
+      <AppliedFiltersPill
+        className="text-green-800 bg-green-50"
+        onDelete={() => {
+          dispatch(filtersSlice.actions.updateMeetingDaysActive(false));
+        }}
+        key="meetingDays"
+      >
+        {[...filter.meetingDays.selected]
+          .sort()
+          .map((day) => DAYS[day]?.slice(0, 3))
+          .join(", ")}
+      </AppliedFiltersPill>
+    );
+  }
+
+  if (filter.timeRange?.active) {
+    badges.push(
+      <AppliedFiltersPill
+        className="text-green-800 bg-green-50"
+        onDelete={() => {
+          dispatch(filtersSlice.actions.updateTimeRangeActive(false));
+        }}
+        key="timeRange"
+      >
+        {`${minutesToTime(filter.timeRange.begin)}–${minutesToTime(filter.timeRange.end)}`}
+      </AppliedFiltersPill>
+    );
+  }
+
+  if (
+    filter.fitAvailability &&
+    isSignedIn &&
+    (profile?.busyBlocks.length ?? 0) > 0
+  ) {
+    badges.push(
+      <AppliedFiltersPill
+        className="text-gray-700 bg-gray-100"
+        onDelete={() => {
+          dispatch(filtersSlice.actions.updateFitAvailability(false));
+        }}
+        key="fitAvailability"
+      >
+        Fits my availability
+      </AppliedFiltersPill>
+    );
+  }
+
   return (
     <div className="flex justify-between">
       {badges.length > 0 && (
         <>
           <div className="flex flex-wrap gap-x-1 gap-y-1.5">{badges}</div>
-          <div
-            className="hover:underline hover:text-blue-500"
+          <button
+            type="button"
+            className="h-fit text-gray-500 hover:text-blue-500 hover:underline"
             onClick={() => {
               dispatch(filtersSlice.actions.resetFilters());
             }}
           >
             Reset
-          </div>
+          </button>
         </>
       )}
     </div>
@@ -246,7 +303,7 @@ const SearchBar = () => {
     dispatch(userSlice.actions.showSchedules(e.target.checked));
   };
 
-  const { active: goalsActive, courseIDs: goalIDs } = useMatchGoalsCourseIDs();
+  const { active: goalsActive, courseIDs: goalIDs } = useFilteredGoalCourseIDs();
   const { data: { totalDocs: searchNumResults } = {} } =
     useSearchPage({ enabled: !goalsActive });
   const numResults = goalsActive ? goalIDs.length : searchNumResults;

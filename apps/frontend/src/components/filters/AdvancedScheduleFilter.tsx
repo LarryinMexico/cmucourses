@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { filtersSlice } from "~/app/filters";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import { useFetchProfile } from "~/app/api/profile";
@@ -22,17 +23,31 @@ const AdvancedScheduleFilter = () => {
   };
   const fitAvailability =
     useAppSelector((state) => state.filters.fitAvailability) ?? false;
-  const { data: profile, isPending: profilePending } = useFetchProfile();
+  const { isSignedIn } = useAuth();
+  // isLoading, not isPending: a disabled query (signed out) stays pending forever.
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+  } = useFetchProfile();
   const hasBusyBlocks = !!profile && profile.busyBlocks.length > 0;
 
-  // Persisted "fit" with no busy blocks would filter everything out and leave the
-  // checkbox stuck disabled — clear it when we know the profile has none.
+  // Persisted "fit" with no busy blocks would filter everything out and leave the checkbox stuck
+  // disabled — clear it only once a signed-in profile has loaded without any.
   useEffect(() => {
-    if (profilePending) return;
+    if (!isSignedIn || profileLoading || profileError || !profile) return;
     if (!hasBusyBlocks && fitAvailability) {
       dispatch(filtersSlice.actions.updateFitAvailability(false));
     }
-  }, [profilePending, hasBusyBlocks, fitAvailability, dispatch]);
+  }, [
+    isSignedIn,
+    profileLoading,
+    profileError,
+    profile,
+    hasBusyBlocks,
+    fitAvailability,
+    dispatch,
+  ]);
 
   return (
     <div className="space-y-3 text-gray-500 text-sm">
@@ -89,7 +104,7 @@ const AdvancedScheduleFilter = () => {
           />
           Exact time window
         </label>
-        <div className="mt-1 flex items-center gap-2 pl-5">
+        <div className="mt-1 flex flex-wrap items-center gap-2 pl-5">
           <input
             type="time"
             className={INPUT_CLASS}
@@ -115,6 +130,11 @@ const AdvancedScheduleFilter = () => {
                 );
             }}
           />
+          {timeRange.begin >= timeRange.end && (
+            <span className="basis-full text-red-700 text-xs">
+              Start must be before end
+            </span>
+          )}
         </div>
       </div>
       <label className="block">
@@ -133,7 +153,9 @@ const AdvancedScheduleFilter = () => {
       </label>
       {!hasBusyBlocks && (
         <div className="pl-5 text-gray-400 text-xs">
-          Add weekly busy times on your Profile to enable this filter.
+          {isSignedIn
+            ? "Add weekly busy times on your Profile to enable this filter."
+            : "Sign in and add busy times on your Profile to use this."}
         </div>
       )}
     </div>

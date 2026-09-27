@@ -5,82 +5,18 @@ import Loading from "./Loading";
 import { useFetchCourseInfos } from "~/app/api/course";
 import { Pagination } from "./Pagination";
 import { filtersSlice } from "~/app/filters";
-import { useMatchGoalsCourseIDs } from "~/app/matchGoals";
-import { useFetchProfile } from "~/app/api/profile";
+import { useFilteredGoalCourseIDs } from "~/app/matchGoals";
 import { useSearchPage } from "~/app/availability";
-import {
-  ClientCourseFilters,
-  courseMatchesClientFilters,
-} from "~/app/courseFilterPredicates";
-import type { Course } from "~/app/types";
 
 const PAGE_SIZE = 10;
 
-/**
- * Match-my-goals lists never go through /search, so their schedule filters (meeting days, time
- * window, fit availability) are applied here. Catalog search does all of it on the backend.
- */
-const useClientFilteredCourses = (courses: Course[]) => {
-  const meetingDays = useAppSelector((state) => state.filters.meetingDays);
-  const timeRange = useAppSelector((state) => state.filters.timeRange);
-  const fitAvailability = useAppSelector(
-    (state) => state.filters.fitAvailability
-  );
-  const semesters = useAppSelector((state) => state.filters.semesters);
-  const { data: profile, isPending: profilePending } = useFetchProfile();
-
-  return useMemo(() => {
-    const sessions =
-      semesters?.active && semesters.sessions.length > 0
-        ? semesters.sessions
-        : undefined;
-    const filters: ClientCourseFilters = {
-      sessions,
-      meetingDays:
-        meetingDays?.active && meetingDays.selected.length > 0
-          ? meetingDays.selected
-          : undefined,
-      timeRange: timeRange?.active
-        ? { begin: timeRange.begin, end: timeRange.end }
-        : undefined,
-      // Skip while profile is loading so a rehydrated flag does not empty the list.
-      fitAvailability: !profilePending && (fitAvailability ?? false),
-    };
-    const enabled =
-      filters.meetingDays !== undefined ||
-      filters.timeRange !== undefined ||
-      filters.fitAvailability;
-    if (!enabled) return courses;
-    return courses.filter((course) =>
-      courseMatchesClientFilters(course, filters, profile?.busyBlocks ?? [])
-    );
-  }, [
-    courses,
-    meetingDays,
-    timeRange,
-    fitAvailability,
-    semesters,
-    profile?.busyBlocks,
-    profilePending,
-  ]);
-};
-
+/** One page of an already-filtered Match-my-goals list. */
 const CoursePage = ({ courseIDs }: { courseIDs: string[] }) => {
   const showFCEs = useAppSelector((state) => state.user.showFCEs);
   const showCourseInfos = useAppSelector((state) => state.user.showCourseInfos);
   const showSchedules = useAppSelector((state) => state.user.showSchedules);
 
-  const results = useFetchCourseInfos(courseIDs);
-  const filteredResults = useClientFilteredCourses(results);
-  const filteredIDs = new Set(filteredResults.map((course) => course.courseID));
-  const visibleCourseIDs = courseIDs.filter((courseID) =>
-    filteredIDs.has(courseID)
-  );
-
-  if (
-    courseIDs.length === 0 ||
-    (results.length > 0 && visibleCourseIDs.length === 0)
-  ) {
+  if (courseIDs.length === 0) {
     return (
       <div className="mt-6 text-center text-gray-400">
         No courses match your goals.
@@ -90,16 +26,15 @@ const CoursePage = ({ courseIDs }: { courseIDs: string[] }) => {
 
   return (
     <div className="space-y-4">
-      {results &&
-        visibleCourseIDs.map((courseID) => (
-          <CourseCard
-            courseID={courseID}
-            key={courseID}
-            showFCEs={showFCEs}
-            showCourseInfo={showCourseInfos}
-            showSchedules={showSchedules}
-          />
-        ))}
+      {courseIDs.map((courseID) => (
+        <CourseCard
+          courseID={courseID}
+          key={courseID}
+          showFCEs={showFCEs}
+          showCourseInfo={showCourseInfos}
+          showSchedules={showSchedules}
+        />
+      ))}
     </div>
   );
 };
@@ -160,9 +95,13 @@ const CourseSearchList = () => {
     active: goalsActive,
     ready: goalsReady,
     courseIDs: goalIDs,
-  } = useMatchGoalsCourseIDs();
-  const { isPending, data: { totalPages: searchTotalPages } = {} } =
-    useSearchPage({ enabled: !goalsActive });
+  } = useFilteredGoalCourseIDs();
+  const {
+    isPending,
+    isError,
+    refetch,
+    data: { totalPages: searchTotalPages, totalDocs } = {},
+  } = useSearchPage({ enabled: !goalsActive });
 
   const dispatch = useAppDispatch();
 
@@ -212,8 +151,30 @@ const CourseSearchList = () => {
 
   return (
     <div className="p-6">
-      {isPending || !searchTotalPages ? (
+      {isPending ? (
         <Loading />
+      ) : isError && totalDocs === undefined ? (
+        <div className="mt-6 text-center text-gray-500">
+          Couldn&apos;t load courses.{" "}
+          <button
+            type="button"
+            className="text-gray-500 underline"
+            onClick={() => void refetch()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : !totalDocs || !searchTotalPages ? (
+        <div className="mt-6 text-center text-gray-500">
+          No courses match these filters. Try removing one.{" "}
+          <button
+            type="button"
+            className="text-gray-500 underline"
+            onClick={() => dispatch(filtersSlice.actions.resetFilters())}
+          >
+            Reset filters
+          </button>
+        </div>
       ) : (
         <>
           <SearchCoursePage />

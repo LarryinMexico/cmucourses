@@ -4,30 +4,11 @@ import { ChevronUpDownIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import React from "react";
 import { filtersSlice } from "~/app/filters";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
-import { Session, SummerSession } from "~/app/types";
+import { Session } from "~/app/types";
+import { offeredInSessions } from "~/app/offeredIn";
 import { classNames, sessionToShortString, sessionToString } from "~/app/utils";
 
-// Every semester back to Fall 2020, with the summer sub-sessions the catalog records next to each
-// summer. Qatar summer is left out, as everywhere else (see filterSessions in utils).
-const SUMMER_SESSIONS: SummerSession[] = [
-  "summer one",
-  "summer two",
-  "summer all",
-];
-
-const YEARS = ["2026", "2025", "2024", "2023", "2022", "2021"];
-
-const SESSIONS: Session[] = [
-  ...YEARS.flatMap((year): Session[] => [
-    { year, semester: "fall" },
-    { year, semester: "summer" },
-    ...SUMMER_SESSIONS.map(
-      (session): Session => ({ year, semester: "summer", session })
-    ),
-    { year, semester: "spring" },
-  ]),
-  { year: "2020", semester: "fall" },
-];
+const SESSIONS: Session[] = offeredInSessions(new Date().getFullYear());
 
 // A chosen session comes back from redux-persist as a new object, so identity cannot tell which
 // list entries are selected; compare by what it says instead.
@@ -109,7 +90,7 @@ const SemestersOfferedFilter = () => {
                 className={({ active }) => {
                   return classNames(
                     "relative cursor-pointer select-none py-2 pl-3 pr-9 focus:outline-none ",
-                    active ? "bg-indigo-600 text-gray-600" : "text-gray-900"
+                    active ? "bg-gray-100 text-gray-900" : "text-gray-900"
                   );
                 }}
               >
