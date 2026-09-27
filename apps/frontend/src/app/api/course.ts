@@ -5,6 +5,10 @@ import { Course, Session } from "~/app/types";
 import { STALE_TIME } from "~/app/constants";
 import { FiltersState } from "~/app/filters";
 import { useAppSelector } from "~/app/hooks";
+import {
+  summarizeCourseQueries,
+  type CourseInfosStatus,
+} from "~/app/api/courseStatus";
 import type { BusyBlock } from "@cmucourses/profile";
 
 export type FetchCourseInfosByPageResult = {
@@ -142,21 +146,23 @@ export const useFetchCourseInfo = (courseID: string) => {
   });
 };
 
-export const useFetchCourseInfos = (courseIDs: string[]) => {
-  return useQueries({
+/**
+ * Details for several courses, plus whether they are all in and which are missing or failed.
+ * Shares its cache with useFetchCourseInfo(s).
+ */
+export const useCourseInfosStatus = (courseIDs: string[]): CourseInfosStatus =>
+  useQueries({
     queries: courseIDs.map((courseID) => ({
       queryKey: ["courseInfo", { courseID }],
       queryFn: () => fetchCourseInfosBatcher.fetch(courseID),
       staleTime: STALE_TIME,
     })),
-    combine: (result) => {
-      return result.reduce((acc, { data }) => {
-        if (data) acc.push(data);
-        return acc;
-      }, [] as Course[]);
-    },
+    combine: (results) => summarizeCourseQueries(courseIDs, results),
   });
-};
+
+/** The details that have arrived, in order. */
+export const useFetchCourseInfos = (courseIDs: string[]) =>
+  useCourseInfosStatus(courseIDs).courses;
 
 type FetchAllCoursesType = { name: string; courseID: string }[];
 

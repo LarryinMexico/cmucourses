@@ -19,11 +19,11 @@ import { classNames } from "~/app/utils";
 // page looks like the rest of the site.
 
 export const INPUT_CLASS =
-  "min-w-0 rounded border px-2 py-1 text-sm bg-transparent border-gray-200";
+  "min-w-0 rounded border px-2 py-1 text-sm text-gray-800 bg-transparent border-gray-200";
 export const PRIMARY_BUTTON_CLASS =
   "inline-flex justify-center rounded border px-4 py-2 text-sm font-medium border-transparent text-blue-900 bg-blue-50 hover:bg-blue-100 disabled:cursor-default disabled:opacity-50";
 export const SECONDARY_BUTTON_CLASS =
-  "rounded border px-4 py-2 text-sm text-gray-500 hover:bg-gray-50";
+  "inline-flex justify-center rounded border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:cursor-default disabled:opacity-50";
 
 const BUTTON_CLASS =
   "relative w-full cursor-default rounded border py-1 pl-1 pr-10 text-left transition duration-150 ease-in-out border-gray-200 sm:text-sm sm:leading-5";
