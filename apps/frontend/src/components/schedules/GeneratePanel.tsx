@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { emptyProfile, LIMITS } from "@cmucourses/profile";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
-import { useFetchCourseInfos } from "~/app/api/course";
+import { useCourseInfosStatus } from "~/app/api/course";
 import { useFetchProfile } from "~/app/api/profile";
 import {
   selectActiveUserSchedule,
@@ -53,7 +53,8 @@ const GeneratePanel = () => {
   const scheduled = allScheduled.filter((id) => !appliedAdds.includes(id));
   const selectedSession = useAppSelector(selectSessionInActiveSchedule);
   const scheduledKey = scheduled.join(",");
-  const courseDetails = useFetchCourseInfos(scheduled);
+  const scheduledStatus = useCourseInfosStatus(scheduled);
+  const courseDetails = scheduledStatus.courses;
   const currentSessions = useAppSelector(selectCourseSessionsInActiveSchedule);
   const generatedMeta = useAppSelector(selectActiveUserSchedule)?.generated;
   const [appliedIndex, setAppliedIndex] = useState<number | null>(null);
@@ -91,13 +92,18 @@ const GeneratePanel = () => {
     includePlanned,
   });
   const poolKey = pool.ids.join(",");
-  const poolDetails = useFetchCourseInfos(pool.ids);
+  const poolStatus = useCourseInfosStatus(pool.ids);
+  const poolDetails = poolStatus.courses;
 
   // Every course's catalog data must be in before generating: a course whose info has not
-  // arrived would look like one with no schedule and be left out.
-  const loading =
-    courseDetails.length < scheduled.length ||
-    poolDetails.length < pool.ids.length;
+  // arrived would look like one with no schedule and be left out. A course the catalog does not
+  // have is settled (the generator reports it), so it must not keep this waiting.
+  const loading = scheduledStatus.isPending || poolStatus.isPending;
+  const failed = [...scheduledStatus.failed, ...poolStatus.failed];
+  const retryFailed = () => {
+    scheduledStatus.retryFailed();
+    poolStatus.retryFailed();
+  };
 
   // Drop stale options when the semester, course list or pool changes.
   useEffect(() => {
@@ -304,7 +310,7 @@ const GeneratePanel = () => {
             type="button"
             className={`${PRIMARY_BUTTON_CLASS} w-full`}
             onClick={generate}
-            disabled={loading || unitsInvalid}
+            disabled={loading || failed.length > 0 || unitsInvalid}
           >
             {loading
               ? "Loading course data…"
@@ -312,6 +318,18 @@ const GeneratePanel = () => {
                 ? "Regenerate"
                 : "Generate Schedules"}
           </button>
+          {!loading && failed.length > 0 && (
+            <div className="mt-1 text-gray-500 text-xs">
+              Couldn&apos;t load {failed.join(", ")}.{" "}
+              <button
+                type="button"
+                className="text-gray-500 underline"
+                onClick={retryFailed}
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </>
       )}
       {candidates && (

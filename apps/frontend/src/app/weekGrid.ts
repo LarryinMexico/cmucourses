@@ -16,6 +16,9 @@ export interface GridBlock {
   /** Percent of the grid's height. */
   top: number;
   height: number;
+  /** Clipped start and end in minutes after midnight; overlap is judged on these, not on percents. */
+  from: number;
+  to: number;
   title: string;
   subtitle: string | null;
   color: string | null;
@@ -33,6 +36,8 @@ const place = (begin: number, end: number) => {
   return {
     top: ((from - GRID_START) / span) * 100,
     height: ((to - from) / span) * 100,
+    from,
+    to,
   };
 };
 
@@ -105,7 +110,7 @@ const assignColumns = (blocks: GridBlock[]) => {
   for (const day of GRID_DAYS) {
     const sorted = blocks
       .filter((b) => b.day === day)
-      .sort((a, b) => a.top - b.top || b.height - a.height);
+      .sort((a, b) => a.from - b.from || b.to - a.to);
     let group: GridBlock[] = [];
     let groupEnd = -1;
     let columnEnds: number[] = [];
@@ -115,13 +120,14 @@ const assignColumns = (blocks: GridBlock[]) => {
       columnEnds = [];
     };
     for (const block of sorted) {
-      if (group.length > 0 && block.top >= groupEnd) close();
-      let col = columnEnds.findIndex((end) => end <= block.top);
+      // Whole minutes, so blocks that only touch (1-2 PM, then 2 PM) never count as overlapping.
+      if (group.length > 0 && block.from >= groupEnd) close();
+      let col = columnEnds.findIndex((end) => end <= block.from);
       if (col === -1) col = columnEnds.length;
-      columnEnds[col] = block.top + block.height;
+      columnEnds[col] = block.to;
       block.col = col;
       group.push(block);
-      groupEnd = Math.max(groupEnd, block.top + block.height);
+      groupEnd = Math.max(groupEnd, block.to);
     }
     if (group.length > 0) close();
   }
@@ -136,17 +142,27 @@ export const unplacedCourses = (
   details: Course[],
   semester: string,
   meetings: ScheduleMeeting[],
-  notFound: string[]
+  notFound: string[],
+  picks: { [courseID: string]: { Lecture?: string; Section?: string } }
 ): string[] =>
   courseIDs.flatMap((id) => {
     if (meetings.some((m) => m.courseID === id)) return [];
     if (notFound.includes(id)) return [`${id} (not in the catalog)`];
     const course = details.find((d) => d.courseID === id);
     if (!course) return [];
-    const offered = (course.schedules ?? []).some(
+    const offering = (course.schedules ?? []).find(
       (s) => sessionToString(s) === semester
     );
+    if (!offering) return [`${id} (not offered ${semester})`];
+    const pick = picks[id];
+    if (!pick?.Lecture && !pick?.Section) return [`${id} (no section picked)`];
+    const listed =
+      (!pick.Lecture ||
+        offering.lectures.some((l) => l.name === pick.Lecture)) &&
+      (!pick.Section || offering.sections.some((x) => x.name === pick.Section));
     return [
-      offered ? `${id} (no section picked)` : `${id} (not offered ${semester})`,
+      listed
+        ? `${id} (no meeting times listed)`
+        : `${id} (picked section no longer listed)`,
     ];
   });

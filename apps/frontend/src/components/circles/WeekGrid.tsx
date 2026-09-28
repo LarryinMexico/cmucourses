@@ -61,7 +61,14 @@ const WeekGrid = ({ post }: { post: CirclePost }) => {
       blocks: laid.blocks,
       offGrid: [
         ...laid.offGrid,
-        ...unplacedCourses(courseIDs, details, semester, meetings, notFound),
+        ...unplacedCourses(
+          courseIDs,
+          details,
+          semester,
+          meetings,
+          notFound,
+          selections
+        ),
       ],
     };
   }, [post.courses, post.busyBlocks, details, semester, courseIDs, notFound]);

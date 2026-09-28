@@ -110,6 +110,16 @@ describe("layoutWeek columns for overlapping blocks", () => {
     expect(cols(blocks)).toEqual({ A: [0, 2], B: [1, 2], C: [0, 2] });
   });
 
+  it("blocks that only touch keep the whole width", () => {
+    // 1-2 PM then 2 PM: in percents, 1-2 PM's end lands a hair past 2 PM's top.
+    const { blocks } = layoutWeek(
+      [meeting("15-213", [1], "02:00PM", "02:50PM")],
+      [{ day: 1, begin: 780, end: 840, label: "Work" }],
+      {}
+    );
+    expect(cols(blocks)).toEqual({ "15-213": [0, 1], Work: [0, 1] });
+  });
+
   it("blocks on different days never share columns", () => {
     const { blocks } = layoutWeek(
       [
@@ -124,33 +134,56 @@ describe("layoutWeek columns for overlapping blocks", () => {
 });
 
 describe("unplacedCourses", () => {
+  const lecture = (name: string, times: unknown[] = []) => ({
+    name,
+    instructors: [],
+    location: "Pittsburgh",
+    times,
+  });
   const withFall = (courseID: string) => ({
     courseID,
     schedules: [
-      { courseID, year: 2026, semester: "fall", lectures: [], sections: [] },
+      {
+        courseID,
+        year: 2026,
+        semester: "fall",
+        lectures: [lecture("Lec 1")],
+        sections: [],
+      },
     ],
   });
 
   it("names courses that produced no meetings, and why", () => {
     const entries = unplacedCourses(
-      ["95-867", "15-213", "21-127", "15-122"],
+      ["95-867", "15-213", "21-127", "15-122", "10-301", "36-200"],
       [
         withFall("15-213"),
         { courseID: "21-127", schedules: [] },
         withFall("15-122"),
+        withFall("10-301"),
+        withFall("36-200"),
       ] as never,
       "Fall 2026",
       [meeting("15-122", [1], "10:00AM", "10:50AM")],
-      ["95-867"]
+      ["95-867"],
+      {
+        "15-122": { Lecture: "Lec 1" },
+        "10-301": { Lecture: "Lec 1" },
+        "36-200": { Lecture: "Lec 9" },
+      }
     );
     expect(entries).toEqual([
       "95-867 (not in the catalog)",
       "15-213 (no section picked)",
       "21-127 (not offered Fall 2026)",
+      "10-301 (no meeting times listed)",
+      "36-200 (picked section no longer listed)",
     ]);
   });
 
   it("says nothing about a course whose details are still unknown", () => {
-    expect(unplacedCourses(["15-213"], [], "Fall 2026", [], [])).toEqual([]);
+    expect(unplacedCourses(["15-213"], [], "Fall 2026", [], [], {})).toEqual(
+      []
+    );
   });
 });

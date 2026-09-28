@@ -311,9 +311,6 @@ const CirclesContent = () => {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-4">
-            <div className="lg:hidden">
-              <ShareCard myPosts={me?.posts ?? []} />
-            </div>
             {tab === "feed" ? (
               <Feed
                 filter={feedFilter}
@@ -379,7 +376,8 @@ const CirclesContent = () => {
               </div>
             )}
           </div>
-          <aside className="hidden space-y-4 lg:block">
+          {/* On phones the sidebar (Share, suggestions) sits above the feed, which scrolls forever. */}
+          <aside className="order-first space-y-4 lg:order-none">
             <ShareCard myPosts={me?.posts ?? []} />
             {suggestions.length > 0 && (
               <Card>

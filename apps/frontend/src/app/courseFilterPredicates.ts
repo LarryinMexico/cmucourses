@@ -5,13 +5,21 @@ import {
   type BusyBlock,
 } from "@cmucourses/profile";
 import type { Course, Schedule, Session, Time } from "./types";
-import { compareSessions, filterSessions } from "./utils";
+import {
+  compareSessions,
+  filterSessions,
+  isValidUnits,
+  parseUnits,
+} from "./utils";
 import type { ClassTime, FiltersState } from "./filters";
 
 export interface ClientCourseFilters {
   meetingDays?: number[];
   timeRange?: { begin: number; end: number };
-  /** When set, only judge these offerings (Offered in). Otherwise most recent. */
+  /**
+   * When set, only judge these offerings (Offered in). Otherwise fit-availability judges the most
+   * recent offering and class times / days / window any offering, as /search does.
+   */
   sessions?: Session[];
   fitAvailability?: boolean;
   /** Department names, as the search sidebar stores them. */
@@ -22,33 +30,32 @@ export interface ClientCourseFilters {
   classTimes?: ClassTime[];
 }
 
-
-/** Same buckets as the backend's CLASS_TIME_PATTERNS: by begin time, tba when untimed. */
-export const classTimeOf = (time: Time): ClassTime => {
+/**
+ * Same buckets as the backend's CLASS_TIME_PATTERNS, which match `begin` by pattern: 6-11 AM is
+ * morning, 12-4 PM afternoon, 5-11 PM evening, and only a literal "TBA" is tba. Anything else
+ * (a 5:30 AM or midnight start, a malformed time) is in no bucket, as on the backend.
+ */
+export const classTimeOf = (time: Time): ClassTime | null => {
+  if (time.begin === "TBA") return "tba";
   const begin = parseCatalogTime(time.begin);
-  if (begin === null) return "tba";
+  if (begin === null) return null;
   if (begin >= 6 * 60 && begin < 12 * 60) return "morning";
   if (begin >= 12 * 60 && begin < 17 * 60) return "afternoon";
   if (begin >= 17 * 60) return "evening";
-  return "tba";
+  return null;
 };
 
-/** "12", a range "1-12" or a list "3,5,9" matches when any value is in range; "VAR" always does. */
+/**
+ * The backend converts `units` to a number and drops courses where that fails, so a units range
+ * never matches "VAR", a range like "1-12" or a list like "3,5,9". Mirrored here.
+ */
 export const unitsInRange = (
   units: string,
   range: { min: number; max: number }
 ): boolean => {
-  const values = units
-    .split(/[-,]/)
-    .map((part) => parseFloat(part))
-    .filter((n) => !Number.isNaN(n));
-  if (values.length === 0) return true;
-  const inRange = (n: number) => n >= range.min && n <= range.max;
-  if (units.includes("-") && values.length === 2) {
-    const [low, high] = values as [number, number];
-    return low <= range.max && high >= range.min;
-  }
-  return values.some(inRange);
+  if (!isValidUnits(units)) return false;
+  const value = parseUnits(units);
+  return value >= range.min && value <= range.max;
 };
 
 const courseLevel = (courseID: string) => parseInt(courseID.charAt(3), 10);
@@ -105,6 +112,17 @@ const meetingMatches = (
   );
 };
 
+/** Whether any filter is set, i.e. whether a course's catalog details are needed to judge it. */
+export const hasClientFilters = (filters: ClientCourseFilters): boolean =>
+  filters.departments !== undefined ||
+  filters.levels !== undefined ||
+  filters.units !== undefined ||
+  filters.sessions !== undefined ||
+  filters.meetingDays !== undefined ||
+  filters.timeRange !== undefined ||
+  filters.classTimes !== undefined ||
+  !!filters.fitAvailability;
+
 export const courseMatchesClientFilters = (
   course: Course,
   filters: ClientCourseFilters,
@@ -127,20 +145,26 @@ export const courseMatchesClientFilters = (
   const scoped = schedulesInScope(course.schedules ?? [], filters.sessions);
   if (scoped.length === 0) return false;
 
-  if (filters.classTimes) {
+  // Like /search: class times, days and the time window must all hold on the same offering, which
+  // is any offering unless Offered in narrows it (fit-availability below uses `scoped` instead).
+  if (filters.classTimes || filters.meetingDays || filters.timeRange) {
+    const offerings = filters.sessions ? scoped : (course.schedules ?? []);
     const selected = filters.classTimes;
-    const matches = scoped.some((schedule) =>
-      allTimes(schedule).some((time) => selected.includes(classTimeOf(time)))
-    );
-    if (!matches) return false;
-  }
-
-  if (filters.meetingDays || filters.timeRange) {
-    const matches = scoped.some((schedule) =>
-      allTimes(schedule).some((time) =>
-        meetingMatches(time, filters.meetingDays, filters.timeRange)
-      )
-    );
+    const matches = offerings.some((schedule) => {
+      const times = allTimes(schedule);
+      const classTimeOk =
+        !selected ||
+        times.some((time) => {
+          const bucket = classTimeOf(time);
+          return bucket !== null && selected.includes(bucket);
+        });
+      const daysAndWindowOk =
+        (!filters.meetingDays && !filters.timeRange) ||
+        times.some((time) =>
+          meetingMatches(time, filters.meetingDays, filters.timeRange)
+        );
+      return classTimeOk && daysAndWindowOk;
+    });
     if (!matches) return false;
   }
 

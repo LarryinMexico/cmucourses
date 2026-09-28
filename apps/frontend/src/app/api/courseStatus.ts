@@ -8,6 +8,8 @@ export interface CourseInfosStatus {
   notFound: string[];
   /** The request for these failed. */
   failed: string[];
+  /** Asks again for the failed ones. */
+  retryFailed: () => void;
 }
 
 /**
@@ -16,20 +18,30 @@ export interface CourseInfosStatus {
  */
 export const summarizeCourseQueries = (
   courseIDs: string[],
-  results: { data?: unknown; isPending: boolean; isError: boolean }[]
+  results: {
+    data?: unknown;
+    isPending: boolean;
+    isError: boolean;
+    refetch?: () => unknown;
+  }[]
 ): CourseInfosStatus => {
+  const retries: (() => unknown)[] = [];
   const summary: CourseInfosStatus = {
     courses: [],
     isPending: false,
     notFound: [],
     failed: [],
+    retryFailed: () => retries.forEach((refetch) => void refetch()),
   };
   results.forEach((result, i) => {
     const id = courseIDs[i] ?? "";
-    if (result.isPending) summary.isPending = true;
-    else if (result.isError) summary.failed.push(id);
-    else if (result.data) summary.courses.push(result.data as Course);
-    else summary.notFound.push(id);
+    // Details already in hand win: a failed background refetch keeps the cached course.
+    if (result.data) summary.courses.push(result.data as Course);
+    else if (result.isPending) summary.isPending = true;
+    else if (result.isError) {
+      summary.failed.push(id);
+      if (result.refetch) retries.push(result.refetch);
+    } else summary.notFound.push(id);
   });
   return summary;
 };

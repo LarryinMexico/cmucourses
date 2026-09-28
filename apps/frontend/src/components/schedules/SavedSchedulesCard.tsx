@@ -205,11 +205,15 @@ const SavedSchedulesCard = () => {
   const { isSignedIn } = useAuth();
   const dispatch = useAppDispatch();
   const active = useAppSelector(selectActiveUserSchedule);
-  const { data: saved = [], isPending, isError, refetch } = useSavedSchedules();
+  const { data, isPending, isError, refetch } = useSavedSchedules();
+  const saved = data ?? [];
   const save = useSaveSchedule();
   const [name, setName] = useState("");
 
   if (!isSignedIn) return null;
+
+  // Until the list is known we can't tell "update" from "save new"; guessing would make a duplicate.
+  const listUnknown = !data;
 
   const updating =
     !!active?.savedId && saved.some((s) => s.id === active.savedId);
@@ -235,7 +239,7 @@ const SavedSchedulesCard = () => {
         <button
           type="button"
           className={`${PRIMARY_BUTTON_CLASS} items-center gap-1`}
-          disabled={typeof input === "string" || save.isPending || isPending}
+          disabled={typeof input === "string" || save.isPending || listUnknown}
           title={typeof input === "string" ? input : undefined}
           onClick={() => {
             if (typeof input === "string") return;

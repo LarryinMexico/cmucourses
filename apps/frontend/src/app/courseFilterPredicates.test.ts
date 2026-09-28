@@ -194,6 +194,8 @@ describe("courseMatchesClientFilters", () => {
   });
 });
 
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
 describe("catalog filters for Match-my-goals lists", () => {
   const match = (over: Partial<Course>, filters: object) =>
     courseMatchesClientFilters({ ...course(), ...over }, filters, []);
@@ -208,14 +210,14 @@ describe("catalog filters for Match-my-goals lists", () => {
     expect(match({}, { levels: [1, 3] })).toBe(false);
   });
 
-  it("units: a single value, any value of a range or list, and variable units", () => {
+  it("units: like /search, only a single number can be in range", () => {
     const range = { units: { min: 9, max: 12 } };
     expect(match({ units: "12" }, range)).toBe(true);
+    expect(match({ units: "12.0" }, range)).toBe(true);
     expect(match({ units: "6" }, range)).toBe(false);
-    expect(match({ units: "1-12" }, range)).toBe(true);
-    expect(match({ units: "3,5,9" }, range)).toBe(true);
-    expect(match({ units: "3,5" }, range)).toBe(false);
-    expect(match({ units: "VAR" }, range)).toBe(true);
+    expect(match({ units: "1-12" }, range)).toBe(false);
+    expect(match({ units: "3,5,9" }, range)).toBe(false);
+    expect(match({ units: "VAR" }, range)).toBe(false);
   });
 
   it("classTimes: buckets by begin time, tba for an untimed meeting", () => {
@@ -230,5 +232,61 @@ describe("catalog filters for Match-my-goals lists", () => {
     expect(
       courseMatchesClientFilters(tba, { classTimes: ["morning"] }, [])
     ).toBe(false);
+  });
+
+  it("classTimes: a start before 6 AM is in no bucket, as on the backend", () => {
+    const early = course();
+    early.schedules![0]!.lectures[0]!.times[0]!.begin = "05:30AM";
+    for (const bucket of ["morning", "tba"] as const)
+      expect(
+        courseMatchesClientFilters(early, { classTimes: [bucket] }, [])
+      ).toBe(false);
+  });
+
+  it("class time and meeting days must hold on the same offering", () => {
+    // Fall: morning on Mon/Wed. Spring: evening on Tuesday.
+    const twoTerms = course();
+    const spring = clone(twoTerms.schedules![0]!);
+    spring.year = "2027";
+    spring.semester = "spring";
+    spring.lectures[0]!.times[0] = {
+      ...spring.lectures[0]!.times[0]!,
+      days: [2],
+      begin: "06:00PM",
+      end: "06:50PM",
+    };
+    twoTerms.schedules!.push(spring);
+    const both = {
+      sessions: [
+        { year: "2026", semester: "fall" as const },
+        { year: "2027", semester: "spring" as const },
+      ],
+    };
+    expect(
+      courseMatchesClientFilters(
+        twoTerms,
+        { ...both, classTimes: ["morning"], meetingDays: [2] },
+        []
+      )
+    ).toBe(false);
+    expect(
+      courseMatchesClientFilters(
+        twoTerms,
+        { ...both, classTimes: ["evening"], meetingDays: [2] },
+        []
+      )
+    ).toBe(true);
+  });
+
+  it("with no Offered in, any offering can satisfy class times (as /search)", () => {
+    const withOld = course();
+    const old = clone(withOld.schedules![0]!);
+    old.year = "2020";
+    old.lectures[0]!.times[0]!.begin = "06:00PM";
+    old.lectures[0]!.times[0]!.end = "06:50PM";
+    withOld.schedules!.push(old);
+    expect(
+      courseMatchesClientFilters(withOld, { classTimes: ["evening"] }, [])
+    ).toBe(true);
   });
 });

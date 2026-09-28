@@ -95,6 +95,8 @@ const CourseSearchList = () => {
     active: goalsActive,
     ready: goalsReady,
     courseIDs: goalIDs,
+    failedCount: goalsFailed,
+    retryFailed: retryGoals,
   } = useFilteredGoalCourseIDs();
   const {
     isPending,
@@ -133,8 +135,27 @@ const CourseSearchList = () => {
       pageIndex * PAGE_SIZE + PAGE_SIZE
     );
 
+    const failedLine = goalsFailed > 0 && (
+      <div className="mt-6 text-center text-gray-500">
+        Couldn&apos;t load {goalsFailed} of your goal courses; they are left
+        out.{" "}
+        <button
+          type="button"
+          className="text-gray-500 underline"
+          onClick={retryGoals}
+        >
+          Retry
+        </button>
+      </div>
+    );
+
+    // Nothing loaded at all: say so instead of "No courses match your goals".
+    if (goalsFailed > 0 && goalIDs.length === 0)
+      return <div className="p-6">{failedLine}</div>;
+
     return (
       <div className="p-6">
+        {failedLine}
         <CoursePage courseIDs={pageIDs} />
         {goalIDs.length > 0 && (
           <div className="mx-auto my-6">

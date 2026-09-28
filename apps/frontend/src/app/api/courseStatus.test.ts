@@ -44,6 +44,15 @@ describe("summarizeCourseQueries", () => {
     });
   });
 
+  it("a failed refetch keeps the course it already had", () => {
+    const summary = summarizeCourseQueries(
+      ["15-213"],
+      [q({ data: { courseID: "15-213" }, isError: true })]
+    );
+    expect(summary.courses.map((c) => c.courseID)).toEqual(["15-213"]);
+    expect(summary.failed).toEqual([]);
+  });
+
   it("a failed query is reported, not treated as loading", () => {
     const summary = summarizeCourseQueries(["15-213"], [q({ isError: true })]);
     expect(summary).toMatchObject({
