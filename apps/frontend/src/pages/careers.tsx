@@ -15,6 +15,7 @@ import { Card } from "~/components/Card";
 import { Pill, TagRow } from "~/components/CourseTags";
 import ProgressBar from "~/components/ProgressBar";
 import { useFetchProfile, useHasProfileGoals } from "~/app/api/profile";
+import { AuthErrorNotice } from "~/components/AuthErrorNotice";
 
 const MAX_SUGGESTED_COURSES = 3;
 
@@ -72,7 +73,7 @@ const CareerProgressCard = ({ progress }: { progress: CareerProgress }) => (
 const YourProgress = () => {
   const { isSignedIn } = useAuth();
   const hasGoals = useHasProfileGoals();
-  const { data: profile, isError, refetch } = useFetchProfile();
+  const { data: profile, isError, error, refetch } = useFetchProfile();
 
   const addGoals = (
     <div className="mt-2 text-gray-400 text-sm">
@@ -83,6 +84,7 @@ const YourProgress = () => {
   if (!isSignedIn) return addGoals;
   if (isError && !profile) {
     return (
+      <AuthErrorNotice error={error} className="mt-2 text-sm">
       <div className="mt-2 text-gray-400 text-sm">
         We couldn&apos;t load your profile.{" "}
         <button
@@ -93,6 +95,7 @@ const YourProgress = () => {
           Try again
         </button>
       </div>
+      </AuthErrorNotice>
     );
   }
   if (!profile) return <Loading />;

@@ -31,36 +31,79 @@ const hasCmuEmail = async (sub: string): Promise<boolean> => {
   return result;
 };
 
-export const verifyUserToken = async (token: string): Promise<JwtPayload> => {
-  const pubkey = process.env.CLERK_PEM_KEY || "";
+/**
+ * Why a token was refused. `code` is what the frontend branches on; `message` is shown as is.
+ * Everything here is a 401: the caller must sign in again (or, for `not_cmu`, with another account).
+ */
+export type AuthErrorCode =
+  | "missing"
+  | "expired"
+  | "not_before"
+  | "invalid"
+  | "wrong_host"
+  | "not_cmu"
+  | "auth_service_error";
 
-  const payload = jwt.verify(token, pubkey, {
-    algorithms: ["RS256"],
-  });
+export class AuthError extends Error {
+  constructor(
+    readonly code: AuthErrorCode,
+    message: string
+  ) {
+    super(message);
+  }
+}
 
-  const currentTime = Math.floor(Date.now() / 1000);
+const MISSING_TOKEN = "You are not signed in. Sign in and try again.";
+
+const verifyJwt = (token: string): JwtPayload => {
+  try {
+    const payload = jwt.verify(token, process.env.CLERK_PEM_KEY || "", { algorithms: ["RS256"] });
+    if (!payload || typeof payload === "string") throw new AuthError("invalid", "Your sign-in is not valid.");
+    return payload;
+  } catch (e) {
+    if (e instanceof AuthError) throw e;
+    // jsonwebtoken checks exp and nbf itself and throws these subclasses of JsonWebTokenError.
+    if (e instanceof jwt.TokenExpiredError) throw new AuthError("expired", "Your session has expired. Sign in again.");
+    if (e instanceof jwt.NotBeforeError) {
+      throw new AuthError("not_before", "Your sign-in is not valid yet. Check your device clock and try again.");
+    }
+    throw new AuthError("invalid", "Your sign-in is not valid. Sign in again.");
+  }
+};
+
+export const verifyUserToken = async (token: unknown): Promise<JwtPayload> => {
+  if (typeof token !== "string" || token === "") throw new AuthError("missing", MISSING_TOKEN);
+
+  const payload = verifyJwt(token);
+
   const BACKEND_ENV = process.env.BACKEND_ENV || "dev";
   const CLERK_LOGIN_HOST = process.env.CLERK_LOGIN_HOST || "http://localhost:3010";
-
-  if (!payload || typeof payload === "string") {
-    throw "No token present. Did you forget to pass in the token with the API call?";
-  } else if (payload.exp && payload.exp < currentTime) {
-    throw "Token has expired.";
-  } else if (payload.nbf && payload.nbf > currentTime) {
-    throw "Token is not valid yet.";
-  } else if (BACKEND_ENV === "prod" && payload.azp && payload.azp !== CLERK_LOGIN_HOST) {
-    throw "Token is not valid for this host.";
+  if (BACKEND_ENV === "prod" && payload.azp && payload.azp !== CLERK_LOGIN_HOST) {
+    throw new AuthError("wrong_host", "This sign-in was issued for another site. Sign in again here.");
   }
 
   const requireCmuAccount =
     process.env.REQUIRE_CMU_EMAIL === "true" || (BACKEND_ENV === "prod" && process.env.REQUIRE_CMU_EMAIL !== "false");
   if (requireCmuAccount) {
-    if (!payload.sub) throw "Token has no subject.";
-    if (!(await hasCmuEmail(payload.sub))) throw "A CMU email account is required.";
+    if (!payload.sub) throw new AuthError("invalid", "Your sign-in is not valid. Sign in again.");
+    let cmu: boolean;
+    try {
+      cmu = await hasCmuEmail(payload.sub);
+    } catch (e) {
+      console.error(e);
+      throw new AuthError("auth_service_error", "Could not check your account. Try again in a moment.");
+    }
+    if (!cmu) throw new AuthError("not_cmu", "A CMU email account is required. Sign in with your Andrew account.");
   }
 
   return payload;
 };
+
+/** The 401 body for a refused token: `{ error, code }`. */
+export const authErrorBody = (e: unknown): { error: string; code: AuthErrorCode } =>
+  e instanceof AuthError
+    ? { error: e.message, code: e.code }
+    : { error: "Your sign-in is not valid.", code: "invalid" };
 
 export type IsUserReqBody<T> = T & { token: string };
 
@@ -69,14 +112,13 @@ export function isUser<P, ResBody, ReqBody, ReqQuery, Locals extends Record<stri
   res: Response<ResBody, Locals>,
   next: NextFunction
 ) {
-  const token: string = req.body.token;
   if (process.env.AUTH_ENABLED !== "true") return next();
 
-  verifyUserToken(token)
+  verifyUserToken(req.body?.token)
     .then(() => next())
     .catch((e) => {
       console.log(e);
-      return res.status(401).send(e);
+      res.status(401).json(authErrorBody(e) as ResBody);
     });
 }
 
@@ -91,20 +133,14 @@ export function requireUser<P, ResBody, ReqBody, ReqQuery>(
   res: Response<ResBody, UserLocals>,
   next: NextFunction
 ) {
-  const token = req.body?.token;
-  if (typeof token !== "string" || token === "") {
-    res.status(401).send("No token present. Did you forget to pass in the token with the API call?" as ResBody);
-    return;
-  }
-
-  verifyUserToken(token)
+  verifyUserToken(req.body?.token)
     .then((payload) => {
-      if (!payload.sub) throw "Token has no subject.";
+      if (!payload.sub) throw new AuthError("invalid", "Your sign-in is not valid. Sign in again.");
       res.locals.userId = payload.sub;
       next();
     })
     .catch((e) => {
       console.log(e);
-      res.status(401).send((e instanceof Error ? e.message : e) as ResBody);
+      res.status(401).json(authErrorBody(e) as ResBody);
     });
 }

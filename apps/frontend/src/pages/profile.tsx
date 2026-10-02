@@ -20,6 +20,7 @@ import {
   ProfileDraftProvider,
   ProfileSaveBar,
 } from "~/components/profile/ProfileDraftContext";
+import { AuthErrorNotice } from "~/components/AuthErrorNotice";
 
 const Completeness = ({ profile }: { profile: Profile }) => {
   const missing = PROFILE_SECTIONS.filter(
@@ -73,7 +74,7 @@ const WelcomeAgain = () => {
 
 const ProfileContent = () => {
   const { isLoaded, isSignedIn } = useAuth();
-  const { data: profile, isError, refetch } = useFetchProfile();
+  const { data: profile, isError, error, refetch } = useFetchProfile();
 
   if (!isLoaded) return <Loading />;
 
@@ -96,6 +97,7 @@ const ProfileContent = () => {
   // A failed refetch keeps the loaded profile; only a first load that failed replaces the cards.
   if (isError && !profile) {
     return (
+      <AuthErrorNotice error={error} className="mt-6 text-center text-sm">
       <div className="mt-6 text-center text-gray-400">
         <p>We couldn&apos;t load your profile.</p>
         {process.env.NODE_ENV === "development" && (
@@ -112,6 +114,7 @@ const ProfileContent = () => {
           Try again
         </button>
       </div>
+      </AuthErrorNotice>
     );
   }
 

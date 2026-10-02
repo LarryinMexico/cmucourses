@@ -13,8 +13,11 @@ import { PHProvider } from "~/app/providers";
 import PostHogPageView from "~/app/PostHogPageView";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { shouldRetryQuery } from "~/app/api/authError";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: shouldRetryQuery } },
+});
 
 export default function MyApp({ Component, pageProps }: AppProps) {
   return (

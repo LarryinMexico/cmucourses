@@ -25,6 +25,7 @@ import {
   SECONDARY_BUTTON_CLASS,
 } from "~/components/profile/fields";
 import InlineConfirm from "~/components/InlineConfirm";
+import { AuthErrorNotice } from "~/components/AuthErrorNotice";
 
 const SUMMER_SESSIONS = ["summer one", "summer two", "summer all"] as const;
 
@@ -205,7 +206,7 @@ const SavedSchedulesCard = () => {
   const { isSignedIn } = useAuth();
   const dispatch = useAppDispatch();
   const active = useAppSelector(selectActiveUserSchedule);
-  const { data, isPending, isError, refetch } = useSavedSchedules();
+  const { data, isPending, isError, error, refetch } = useSavedSchedules();
   const saved = data ?? [];
   const save = useSaveSchedule();
   const [name, setName] = useState("");
@@ -274,16 +275,18 @@ const SavedSchedulesCard = () => {
         </button>
       )}
       {isError ? (
-        <div className="mt-2 text-gray-500 text-sm">
-          Couldn&apos;t load your saved schedules.{" "}
-          <button
-            type="button"
-            className="underline"
-            onClick={() => void refetch()}
-          >
-            Retry
-          </button>
-        </div>
+        <AuthErrorNotice error={error} className="mt-2 text-sm">
+          <div className="mt-2 text-gray-500 text-sm">
+            Couldn&apos;t load your saved schedules.{" "}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => void refetch()}
+            >
+              Retry
+            </button>
+          </div>
+        </AuthErrorNotice>
       ) : isPending ? (
         <div className="mt-2 text-gray-400 text-sm">Loading…</div>
       ) : saved.length === 0 ? (

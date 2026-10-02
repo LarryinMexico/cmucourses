@@ -27,6 +27,7 @@ import { FollowButton } from "~/components/circles/FollowButton";
 import MessagesPanel, {
   type OpenConversation,
 } from "~/components/circles/MessagesPanel";
+import { AuthErrorNotice } from "~/components/AuthErrorNotice";
 
 type Tab = "feed" | "people" | "messages";
 const TABS: { id: Tab; label: string }[] = [
@@ -46,13 +47,23 @@ const withoutDm = (query: ParsedUrlQuery) => {
   return next;
 };
 
-const ErrorLine = ({ what, retry }: { what: string; retry: () => void }) => (
-  <div className="text-gray-500 text-sm">
-    Couldn&apos;t load {what}.{" "}
-    <button type="button" className="underline" onClick={retry}>
-      Retry
-    </button>
-  </div>
+const ErrorLine = ({
+  what,
+  retry,
+  error,
+}: {
+  what: string;
+  retry: () => void;
+  error: unknown;
+}) => (
+  <AuthErrorNotice error={error}>
+    <div className="text-gray-500 text-sm">
+      Couldn&apos;t load {what}.{" "}
+      <button type="button" className="underline" onClick={retry}>
+        Retry
+      </button>
+    </div>
+  </AuthErrorNotice>
 );
 
 /** The feed, a page at a time: the next page loads when the bottom comes into view. */
@@ -140,7 +151,11 @@ const Feed = ({
         </button>
       )}
       {feed.isError && posts.length === 0 ? (
-        <ErrorLine what="the feed" retry={() => void feed.refetch()} />
+        <ErrorLine
+          what="the feed"
+          retry={() => void feed.refetch()}
+          error={feed.error}
+        />
       ) : feed.isPending ? (
         <div className="text-gray-400 text-sm">Loading posts…</div>
       ) : posts.length === 0 ? (
@@ -377,6 +392,7 @@ const CirclesContent = () => {
                   <ErrorLine
                     what="people"
                     retry={() => void directory.refetch()}
+                    error={directory.error}
                   />
                 ) : directory.isPending ? (
                   <div className="text-gray-400 text-sm">Loading people…</div>

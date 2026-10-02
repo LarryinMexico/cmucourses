@@ -21,6 +21,7 @@ import { PlanSemesters } from "~/components/profile/PlanSemesters";
 import { useFetchProfile } from "~/app/api/profile";
 import { useFetchCourseInfos } from "~/app/api/course";
 import { displayUnits } from "~/app/utils";
+import { AuthErrorNotice } from "~/components/AuthErrorNotice";
 
 const STATUS_LABEL: Record<RequirementStatus["status"], string> = {
   TAKEN: "Taken",
@@ -291,7 +292,7 @@ const GenericRequirementsPlanner = ({ profile }: { profile: Profile }) => {
 
 const RequirementsContent = () => {
   const { isLoaded, isSignedIn } = useAuth();
-  const { data: profile, isError, refetch } = useFetchProfile();
+  const { data: profile, isError, error, refetch } = useFetchProfile();
 
   if (!isLoaded) return <Loading />;
 
@@ -310,16 +311,18 @@ const RequirementsContent = () => {
 
   if (isError && !profile) {
     return (
-      <div className="mt-6 text-center text-gray-400">
-        <p>We couldn&apos;t load your profile.</p>
-        <button
-          type="button"
-          className="mt-2 text-blue-600 hover:underline"
-          onClick={() => void refetch()}
-        >
-          Try again
-        </button>
-      </div>
+      <AuthErrorNotice error={error} className="mt-6 text-center text-sm">
+        <div className="mt-6 text-center text-gray-400">
+          <p>We couldn&apos;t load your profile.</p>
+          <button
+            type="button"
+            className="mt-2 text-blue-600 hover:underline"
+            onClick={() => void refetch()}
+          >
+            Try again
+          </button>
+        </div>
+      </AuthErrorNotice>
     );
   }
 
