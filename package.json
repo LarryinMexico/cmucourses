@@ -8,7 +8,8 @@
     "start": "nx run-many -t start --parallel",
     "format": "prettier --write . --ignore-path .gitignore",
     "catalog-sync": "bun run scripts/catalog/sync-atlas.mjs",
-    "demo-seed": "bun run scripts/demo/seed-circles.mjs"
+    "demo-seed": "bun run scripts/demo/seed-circles.mjs",
+    "migrate-post-kind": "bun run scripts/migrate/circle-post-kind.mjs"
   },
   "devDependencies": {
     "@nx/next": "19.6.3",

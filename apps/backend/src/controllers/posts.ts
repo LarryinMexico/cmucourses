@@ -30,17 +30,17 @@ const firstIssue = (error: { issues: { message: string }[] }, fallback: string) 
 export const getFeed: RequestHandler<
   unknown,
   FeedPage | ErrorBody,
-  { token: string; cursor?: unknown; filter?: unknown },
+  { token: string; cursor?: unknown; filter?: unknown; kind?: unknown },
   unknown,
   UserLocals
 > = async (req, res, next) => {
-  const parsed = feedQuerySchema.safeParse({ cursor: req.body.cursor, filter: req.body.filter });
+  const parsed = feedQuerySchema.safeParse({ cursor: req.body.cursor, filter: req.body.filter, kind: req.body.kind });
   if (!parsed.success) {
     res.status(400).json({ error: firstIssue(parsed.error, "Invalid feed request") });
     return;
   }
   const me = res.locals.userId;
-  const { cursor, filter } = parsed.data;
+  const { cursor, filter, kind } = parsed.data;
   try {
     const [myProfile, myFollows] = await Promise.all([
       db.profiles.findUnique({ where: { clerkUserId: me } }),
@@ -60,6 +60,7 @@ export const getFeed: RequestHandler<
     const rows = await db.circlePosts.findMany({
       where: {
         ...authorFilter,
+        ...(kind ? { kind } : {}),
         ...(after
           ? { OR: [{ updatedAt: { lt: after.updatedAt } }, { updatedAt: after.updatedAt, id: { lt: after.id } }] }
           : {}),
@@ -110,11 +111,11 @@ export const getFeed: RequestHandler<
 export const sharePost: RequestHandler<
   unknown,
   { postID: string } | ErrorBody,
-  { token: string; savedScheduleId: unknown },
+  { token: string; savedScheduleId: unknown; kind?: unknown },
   unknown,
   UserLocals
 > = async (req, res, next) => {
-  const parsed = sharePostInputSchema.safeParse({ savedScheduleId: req.body.savedScheduleId });
+  const parsed = sharePostInputSchema.safeParse({ savedScheduleId: req.body.savedScheduleId, kind: req.body.kind });
   if (!parsed.success) {
     res.status(400).json({ error: firstIssue(parsed.error, "Invalid schedule ID") });
     return;
@@ -141,10 +142,13 @@ export const sharePost: RequestHandler<
       })),
       sourceScheduleId: saved.id,
     };
+    const { kind } = parsed.data;
     const post = await db.circlePosts.upsert({
-      where: { authorUserId_semester_year: { authorUserId: me, semester: saved.semester, year: saved.year } },
+      where: {
+        authorUserId_semester_year_kind: { authorUserId: me, semester: saved.semester, year: saved.year, kind },
+      },
       update: content,
-      create: { ...content, authorUserId: me, semester: saved.semester, year: saved.year },
+      create: { ...content, authorUserId: me, semester: saved.semester, year: saved.year, kind },
     });
     res.json({ postID: post.id });
   } catch (error) {

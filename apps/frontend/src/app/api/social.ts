@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import type {
   FeedPage,
+  PostKind,
   ScheduleComment,
   SocialDirectory,
   SocialReaction,
@@ -70,14 +71,15 @@ export const useSocialDirectory = () => {
   });
 };
 
-/** The Circles feed, newest first, loaded a page at a time as you scroll. */
-export const useFeed = (filter: FeedFilter) => {
+/** The Circles feed, newest first, loaded a page at a time as you scroll. No `kind` = both. */
+export const useFeed = (filter: FeedFilter, kind?: PostKind) => {
   const { isSignedIn, userId, getToken } = useAuth();
   return useInfiniteQuery({
-    queryKey: [FEED_KEY, userId, filter],
+    queryKey: [FEED_KEY, userId, filter, kind ?? "ALL"],
     queryFn: ({ pageParam }) =>
       post<FeedPage>(getToken, "/social/feed", {
         filter,
+        ...(kind ? { kind } : {}),
         ...(pageParam ? { cursor: pageParam } : {}),
       }),
     initialPageParam: null as string | null,
@@ -90,11 +92,15 @@ export const useFeed = (filter: FeedFilter) => {
  * The newest post for a filter, polled every 30s so the feed can offer "New posts" rather than
  * reshuffling under the reader. Its key starts with the feed's, so social actions refresh it too.
  */
-export const useFeedHead = (filter: FeedFilter) => {
+export const useFeedHead = (filter: FeedFilter, kind?: PostKind) => {
   const { isSignedIn, userId, getToken } = useAuth();
   return useQuery({
-    queryKey: [FEED_KEY, userId, filter, "head"],
-    queryFn: () => post<FeedPage>(getToken, "/social/feed", { filter }),
+    queryKey: [FEED_KEY, userId, filter, kind ?? "ALL", "head"],
+    queryFn: () =>
+      post<FeedPage>(getToken, "/social/feed", {
+        filter,
+        ...(kind ? { kind } : {}),
+      }),
     select: (page) => page.posts[0] ?? null,
     enabled: !!isSignedIn,
     refetchInterval: 30_000,
@@ -144,7 +150,7 @@ export const useToggleFollow = () =>
   );
 
 export const useSharePost = () =>
-  useSocialMutation<{ savedScheduleId: string }>(
+  useSocialMutation<{ savedScheduleId: string; kind: PostKind }>(
     "patch",
     "/user/posts",
     "Couldn't share the schedule. Please try again."

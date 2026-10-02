@@ -32,6 +32,7 @@ const post = (overrides: Partial<PostRow> = {}): PostRow => ({
   id: "74b7f0c2a1d3e4f5a6b7c8d0",
   authorUserId: "user_them",
   name: "Fall plan",
+  kind: "ACTUAL",
   semester: "fall",
   year: "2026",
   session: null,

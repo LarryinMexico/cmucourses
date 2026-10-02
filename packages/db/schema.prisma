@@ -348,10 +348,18 @@ model savedSchedules {
 /// One student's shared schedule for one semester (sharing again replaces it). Copied from a
 /// saved schedule. The old socialSchedules / scheduleReactions / scheduleComments collections are
 /// no longer read; scripts/demo/seed-circles.mjs --migrate-old moves their data here.
+enum CirclePostKind {
+  PLANNED
+  ACTUAL
+}
+
 model circlePosts {
   id               String              @id @default(auto()) @map("_id") @db.ObjectId
   authorUserId     String
   name             String
+  /// Planned before registering, or what the student is actually taking. Posts made before
+  /// this field existed are ACTUAL: run scripts/migrate/circle-post-kind.mjs before db-migrate.
+  kind             CirclePostKind      @default(ACTUAL)
   semester         String
   year             String
   session          String?
@@ -360,7 +368,7 @@ model circlePosts {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
-  @@unique([authorUserId, semester, year])
+  @@unique([authorUserId, semester, year, kind])
   @@index([updatedAt])
 }
 

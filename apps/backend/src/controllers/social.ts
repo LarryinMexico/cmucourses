@@ -57,6 +57,7 @@ export const getSocialDirectory: RequestHandler<
         posts: myPosts.map((post) => ({
           postID: post.id,
           name: post.name,
+          kind: post.kind,
           semester: post.semester as MyPostSummary["semester"],
           year: post.year,
         })),

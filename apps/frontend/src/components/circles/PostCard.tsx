@@ -96,7 +96,10 @@ const PostCard = ({
               {author.academicSummary}
             </div>
           )}
-          <div className="text-gray-400 text-xs">
+          <div className="flex flex-wrap items-center gap-1 text-gray-400 text-xs">
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">
+              {post.kind === "PLANNED" ? "Planned" : "Actual"}
+            </span>
             {semester} · updated {timeAgo(post.updatedAt)}
           </div>
         </div>

@@ -33,6 +33,7 @@ const postRow = (over: object = {}) => ({
   id: POST,
   authorUserId: "user_them",
   name: "Fall plan",
+  kind: "ACTUAL",
   semester: "fall",
   year: "2026",
   session: null,
@@ -45,7 +46,10 @@ const postRow = (over: object = {}) => ({
 beforeEach(resetFakeDb);
 
 describe("sharePost", () => {
-  const share = () => call(sharePost as never, "user_me", { savedScheduleId: SCHED });
+  const share = (body: Record<string, unknown> = {}) =>
+    call(sharePost as never, "user_me", { savedScheduleId: SCHED, ...body });
+  const upsertArgs = (n = 0) =>
+    fakeDb.circlePosts!.upsert!.mock.calls[n]![0] as { where: object; create: object; update: object };
   const saved = {
     id: SCHED,
     clerkUserId: "user_me",
@@ -56,17 +60,41 @@ describe("sharePost", () => {
     courses: [{ courseID: "15-213", lecture: "Lec 1", section: null }],
   };
 
-  test("copies the caller's saved schedule into their post for that semester (one per semester)", async () => {
+  test("copies the caller's saved schedule into their post for that semester and kind", async () => {
     fakeDb.savedSchedules!.findUnique!.mockResolvedValue(saved as never);
     fakeDb.circlePosts!.upsert!.mockResolvedValue(postRow({ authorUserId: "user_me" }) as never);
-    const { status } = await share();
+    const { status } = await share({ kind: "PLANNED" });
     expect(status).toBe(200);
-    const [args] = fakeDb.circlePosts!.upsert!.mock.calls[0] as [{ where: object; create: object; update: object }];
+    const args = upsertArgs();
     expect(args.where).toEqual({
-      authorUserId_semester_year: { authorUserId: "user_me", semester: "fall", year: "2026" },
+      authorUserId_semester_year_kind: { authorUserId: "user_me", semester: "fall", year: "2026", kind: "PLANNED" },
     });
     expect(args.update).toMatchObject({ name: "Plan", courses: saved.courses, sourceScheduleId: SCHED });
-    expect(args.create).toMatchObject({ authorUserId: "user_me", semester: "fall", year: "2026" });
+    expect(args.create).toMatchObject({ authorUserId: "user_me", semester: "fall", year: "2026", kind: "PLANNED" });
+  });
+
+  test("a planned and an actual post for one semester are separate posts", async () => {
+    fakeDb.savedSchedules!.findUnique!.mockResolvedValue(saved as never);
+    fakeDb.circlePosts!.upsert!.mockResolvedValue(postRow({ authorUserId: "user_me" }) as never);
+    await share({ kind: "PLANNED" });
+    await share({ kind: "ACTUAL" });
+    const keys = [upsertArgs(0), upsertArgs(1)].map(
+      (args) =>
+        (args.where as { authorUserId_semester_year_kind: { kind: string } }).authorUserId_semester_year_kind.kind
+    );
+    expect(keys).toEqual(["PLANNED", "ACTUAL"]);
+  });
+
+  test("an older client that sends no kind shares an actual schedule", async () => {
+    fakeDb.savedSchedules!.findUnique!.mockResolvedValue(saved as never);
+    fakeDb.circlePosts!.upsert!.mockResolvedValue(postRow({ authorUserId: "user_me" }) as never);
+    await share();
+    expect(upsertArgs().create).toMatchObject({ kind: "ACTUAL" });
+  });
+
+  test("an unknown kind is a 400", async () => {
+    expect((await share({ kind: "MAYBE" })).status).toBe(400);
+    expect(fakeDb.circlePosts!.upsert!.mock.calls).toHaveLength(0);
   });
 
   test("makes sure the sharer has a profile, so others can find and follow them", async () => {
@@ -191,6 +219,22 @@ describe("getFeed", () => {
       { updatedAt: { lt: new Date("2026-09-10T00:00:00Z") } },
       { updatedAt: new Date("2026-09-10T00:00:00Z"), id: { lt: POST } },
     ]);
+  });
+
+  test("kind narrows to planned or actual posts; absent means both", async () => {
+    await feed({ kind: "PLANNED" });
+    expect((fakeDb.circlePosts!.findMany!.mock.calls[0] as [{ where: object }])[0].where).toMatchObject({
+      kind: "PLANNED",
+    });
+    await feed();
+    expect((fakeDb.circlePosts!.findMany!.mock.calls[1] as [{ where: object }])[0].where).not.toHaveProperty("kind");
+  });
+
+  test("each post says its kind", async () => {
+    fakeDb.circlePosts!.findMany!.mockResolvedValue([postRow({ kind: "PLANNED" })] as never);
+    fakeDb.profiles!.findMany!.mockResolvedValue([profile(THEM)] as never);
+    const { body } = await feed();
+    expect((body as { posts: { kind: string }[] }).posts[0]!.kind).toBe("PLANNED");
   });
 
   test("'mine' and 'following' narrow the authors", async () => {

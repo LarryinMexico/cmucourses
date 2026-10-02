@@ -5,6 +5,7 @@ import {
   labelOf,
   type CirclePost,
   type PostAuthor,
+  type PostKind,
   type SocialDirectoryProfile,
   type SocialReaction,
 } from "@cmucourses/profile";
@@ -29,6 +30,7 @@ export interface PostRow {
   id: string;
   authorUserId: string;
   name: string;
+  kind: PostKind;
   semester: string;
   year: string;
   session?: string | null;
@@ -101,6 +103,7 @@ export const toCirclePost = (
       label: showLabels ? (label ?? null) : null,
     })),
     name: post.name,
+    kind: post.kind,
     semester: post.semester as CirclePost["semester"],
     year: post.year,
     session: SUMMER_SESSIONS.find((s) => s === post.session) ?? null,

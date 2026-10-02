@@ -151,7 +151,14 @@ if (MIGRATE) {
     let made = 0;
     for (const s of old) {
       const exists = await db.circlePosts.findUnique({
-        where: { authorUserId_semester_year: { authorUserId: s.clerkUserId, semester: s.semester, year: s.year } },
+        where: {
+          authorUserId_semester_year_kind: {
+            authorUserId: s.clerkUserId,
+            semester: s.semester,
+            year: s.year,
+            kind: "ACTUAL",
+          },
+        },
       });
       if (exists) continue;
       const post = await db.circlePosts.create({
@@ -276,6 +283,8 @@ for (const [i, { profile, college }] of people.entries()) {
       data: {
         authorUserId: profile.clerkUserId,
         name,
+        // A mix, so the feed's Planned / Actual filter has something to show.
+        kind: (i + t) % 3 === 0 ? "PLANNED" : "ACTUAL",
         semester: term.semester,
         year: String(term.year),
         session: null,

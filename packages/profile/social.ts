@@ -45,9 +45,19 @@ export const threadQuerySchema = z.object({ profileID: profileIDSchema }).strict
 
 const postIDSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid post ID");
 
-/** Share a saved schedule: it becomes (or replaces) your post for that semester. */
+/**
+ * What a post says about its schedule: the plan before registering, or what the student is
+ * actually taking. Each student has at most one of each per semester.
+ */
+export const POST_KINDS = ["PLANNED", "ACTUAL"] as const;
+export type PostKind = (typeof POST_KINDS)[number];
+
+/** Share a saved schedule: it becomes (or replaces) your post of that kind for that semester. */
 export const sharePostInputSchema = z
-  .object({ savedScheduleId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid schedule ID") })
+  .object({
+    savedScheduleId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid schedule ID"),
+    kind: z.enum(POST_KINDS).default("ACTUAL"),
+  })
   .strict();
 
 export const deletePostInputSchema = z.object({ postId: postIDSchema }).strict();
@@ -76,6 +86,8 @@ export const feedQuerySchema = z
       .regex(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z_[a-f\d]{24}$/i, "Invalid cursor")
       .optional(),
     filter: z.enum(FEED_FILTERS).default("all"),
+    /** Only planned or only actual schedules; absent means both. */
+    kind: z.enum(POST_KINDS).optional(),
   })
   .strict();
 
@@ -175,6 +187,7 @@ export interface CirclePost {
   author: PostAuthor;
   busyBlocks: PostBusyBlock[];
   name: string;
+  kind: PostKind;
   semester: PublishedSchedule["semester"];
   year: string;
   session: "summer one" | "summer two" | "summer all" | null;
@@ -198,6 +211,7 @@ export interface FeedPage {
 export interface MyPostSummary {
   postID: string;
   name: string;
+  kind: PostKind;
   semester: PublishedSchedule["semester"];
   year: string;
 }

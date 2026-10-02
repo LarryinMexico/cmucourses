@@ -4,7 +4,11 @@ import { useRouter } from "next/router";
 import type { ParsedUrlQuery } from "querystring";
 import { SignInButton, useAuth } from "@clerk/nextjs";
 import { ArrowUpIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
-import type { CirclePost, SocialDirectoryProfile } from "@cmucourses/profile";
+import type {
+  CirclePost,
+  PostKind,
+  SocialDirectoryProfile,
+} from "@cmucourses/profile";
 import { Page } from "~/components/Page";
 import { Card } from "~/components/Card";
 import Link from "~/components/Link";
@@ -39,6 +43,11 @@ const FEED_FILTERS: { id: FeedFilter; label: string }[] = [
   { id: "all", label: "Everyone" },
   { id: "following", label: "Following" },
   { id: "mine", label: "My posts" },
+];
+const KIND_FILTERS: { id: PostKind | undefined; label: string }[] = [
+  { id: undefined, label: "All schedules" },
+  { id: "PLANNED", label: "Planned" },
+  { id: "ACTUAL", label: "Actual" },
 ];
 
 const withoutDm = (query: ParsedUrlQuery) => {
@@ -80,8 +89,9 @@ const Feed = ({
   ownInterests: ReadonlySet<string>;
   onMessage: (post: CirclePost) => void;
 }) => {
-  const feed = useFeed(filter);
-  const { data: head } = useFeedHead(filter);
+  const [kind, setKind] = useState<PostKind | undefined>(undefined);
+  const feed = useFeed(filter, kind);
+  const { data: head } = useFeedHead(filter, kind);
   const top = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const posts = feed.data?.pages.flatMap((page) => page.posts) ?? [];
@@ -137,6 +147,24 @@ const Feed = ({
             onClick={() => setFilter(f.id)}
           >
             {f.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {KIND_FILTERS.map((k) => (
+          <button
+            key={k.label}
+            type="button"
+            aria-pressed={kind === k.id}
+            className={classNames(
+              "rounded-full border px-3 py-1 text-sm",
+              kind === k.id
+                ? "border-blue-300 bg-blue-50 text-blue-800"
+                : "border-gray-200 text-gray-600"
+            )}
+            onClick={() => setKind(k.id)}
+          >
+            {k.label}
           </button>
         ))}
       </div>

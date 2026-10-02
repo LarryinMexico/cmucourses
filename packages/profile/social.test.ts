@@ -100,3 +100,19 @@ describe("post schemas", () => {
     expect(feedQuerySchema.safeParse({ filter: "friends" }).success).toBe(false);
   });
 });
+
+describe("post kinds", () => {
+  const id = "54b7f0c2a1d3e4f5a6b7c8d8";
+
+  test("a share defaults to an actual schedule and accepts planned", () => {
+    expect(sharePostInputSchema.parse({ savedScheduleId: id }).kind).toBe("ACTUAL");
+    expect(sharePostInputSchema.parse({ savedScheduleId: id, kind: "PLANNED" }).kind).toBe("PLANNED");
+    expect(sharePostInputSchema.safeParse({ savedScheduleId: id, kind: "planned" }).success).toBe(false);
+  });
+
+  test("the feed kind is optional", () => {
+    expect(feedQuerySchema.parse({}).kind).toBeUndefined();
+    expect(feedQuerySchema.parse({ kind: "ACTUAL" }).kind).toBe("ACTUAL");
+    expect(feedQuerySchema.safeParse({ kind: "BOTH" }).success).toBe(false);
+  });
+});
