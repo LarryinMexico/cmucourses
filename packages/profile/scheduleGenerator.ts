@@ -1,4 +1,4 @@
-import { availabilityFit, parseCatalogTime, type MeetingTime } from "./availability";
+import { availabilityFit, parseCatalogTime, timePairOverlaps, type MeetingTime } from "./availability";
 import type { BusyBlock, Modality, SchedulePreferences, Workload } from "./schema";
 import { CAREER_SKILLS } from "./mapping/careerSkills";
 import { courseSkillsIndex, isCareerID } from "./mapping/internal";
@@ -173,18 +173,6 @@ const resolveOptions = (
     staleLocks,
     allExcluded: all.length > 0 && remaining.length === 0,
   };
-};
-
-const timePairOverlaps = (a: MeetingTime, b: MeetingTime): boolean => {
-  if (!a.days.some((day) => b.days.includes(day))) return false;
-  const aBegin = parseCatalogTime(a.begin);
-  const aEnd = parseCatalogTime(a.end);
-  const bBegin = parseCatalogTime(b.begin);
-  const bEnd = parseCatalogTime(b.end);
-  // An unparseable/TBA time carries no information, so it never conflicts (matches
-  // availabilityFit's treatment of TBA as neutral rather than "assume worst case").
-  if (aBegin === null || aEnd === null || bBegin === null || bEnd === null) return false;
-  return aBegin < bEnd && bBegin < aEnd;
 };
 
 const conflictsWithAny = (times: MeetingTime[], used: MeetingTime[]): boolean =>

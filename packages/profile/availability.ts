@@ -45,6 +45,21 @@ export const parseCatalogTime = (time: string): number | null => {
 /** Half-open overlap, so a class starting exactly when a busy block ends does not clash. */
 const overlaps = (begin: number, end: number, block: BusyBlock): boolean => begin < block.end && block.begin < end;
 
+/**
+ * Whether two class meetings overlap: a shared weekday and intersecting times. An unparseable or
+ * TBA time carries no information, so it never conflicts (the same neutral treatment as
+ * availabilityFit). Used by the schedule generator and the manual builder's conflict warning.
+ */
+export const timePairOverlaps = (a: MeetingTime, b: MeetingTime): boolean => {
+  if (!a.days.some((day) => b.days.includes(day))) return false;
+  const aBegin = parseCatalogTime(a.begin);
+  const aEnd = parseCatalogTime(a.end);
+  const bBegin = parseCatalogTime(b.begin);
+  const bEnd = parseCatalogTime(b.end);
+  if (aBegin === null || aEnd === null || bBegin === null || bEnd === null) return false;
+  return aBegin < bEnd && bBegin < aEnd;
+};
+
 const conflictFor = (time: MeetingTime, busyBlocks: BusyBlock[]): BusyBlock | null => {
   const begin = parseCatalogTime(time.begin);
   const end = parseCatalogTime(time.end);

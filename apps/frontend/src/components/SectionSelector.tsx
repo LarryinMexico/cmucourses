@@ -1,6 +1,9 @@
 import React, { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
-import { ChevronUpDownIcon } from "@heroicons/react/24/outline";
+import {
+  ChevronUpDownIcon,
+  ExclamationTriangleIcon,
+} from "@heroicons/react/24/outline";
 import { Listbox, RadioGroup } from "@headlessui/react";
 import {
   classNames,
@@ -19,6 +22,13 @@ import { useFetchCourseInfos } from "~/app/api/course";
 import { userSlice } from "~/app/user";
 import { SCHED_VIEW } from "~/app/constants";
 import { FlushedButton } from "~/components/Buttons";
+import {
+  clashesWith,
+  describeConflicts,
+  optionTimes,
+  pickedMeetings,
+  scheduleConflicts,
+} from "~/app/scheduleConflicts";
 
 const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
   const dispatch = useAppDispatch();
@@ -50,6 +60,20 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
       (schedule) => sessionToString(schedule) === selectedSession
     );
   });
+
+  // Overlaps between different courses' picks. Only a warning: students do take overlapping
+  // courses on purpose (with instructor permission), so nothing is blocked.
+  const picked = pickedMeetings(
+    courseDetails,
+    selectedCourseSessions,
+    selectedSession
+  );
+  const conflicts = scheduleConflicts(
+    courseDetails,
+    selectedCourseSessions,
+    selectedSession
+  );
+  const conflictingCourses = Object.keys(conflicts).length;
 
   // Every course's data must be in before deciding the semester is gone: on a reload the course
   // infos arrive one by one, and resetting early wiped the student's semester (and calendar).
@@ -153,6 +177,13 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
             coursesNotInSemester.length > 0 &&
             `The following courses are not offered in the selected semester: ${coursesNotInSemester.join(", ")}.`}
         </div>
+        {conflictingCourses > 0 && (
+          <div className="flex items-center gap-1 pt-2 text-sm text-yellow-800">
+            <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+            {conflictingCourses} courses overlap in time. You can keep them, but
+            check with the instructors.
+          </div>
+        )}
       </div>
       <div className="my-4">
         {courseDetails
@@ -207,6 +238,12 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
                     &#10005;
                   </button>
                 </div>
+                {conflicts[courseID] && (
+                  <div className="mb-1 flex items-center gap-1 text-sm text-yellow-800">
+                    <ExclamationTriangleIcon className="h-4 w-4 shrink-0" />
+                    {describeConflicts(conflicts[courseID])}
+                  </div>
+                )}
                 <div>
                   <RadioGroup
                     className="grid grid-flow-col divide-x divide-gray-400 justify-stretch rounded-md border border-gray-800 order-gray-200 overflow-x-auto"
@@ -288,22 +325,39 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
                           );
                         }}
                       >
-                        {({ checked }) => (
-                          <span className="flex items-center gap-1 truncate">
-                            {checked && (
-                              <CheckIcon className="h-4 w-4 shrink-0 text-white" />
-                            )}
+                        {({ checked }) => {
+                          const clashes =
+                            !checked &&
+                            clashesWith(
+                              courseID,
+                              optionTimes(schedule, sessionType, session.name),
+                              picked
+                            ).length > 0;
+                          return (
                             <span
-                              className={
-                                checked
-                                  ? "font-semibold text-white"
-                                  : "font-normal text-gray-700"
+                              className="flex items-center gap-1 truncate"
+                              title={
+                                clashes
+                                  ? "Overlaps another course you picked"
+                                  : undefined
                               }
                             >
-                              {session.name}
+                              {checked && (
+                                <CheckIcon className="h-4 w-4 shrink-0 text-white" />
+                              )}
+                              <span
+                                className={
+                                  checked
+                                    ? "font-semibold text-white"
+                                    : "font-normal text-gray-700"
+                                }
+                              >
+                                {session.name}
+                                {clashes && " (conflicts)"}
+                              </span>
                             </span>
-                          </span>
-                        )}
+                          );
+                        }}
                       </RadioGroup.Option>
                     ))}
                   </RadioGroup>

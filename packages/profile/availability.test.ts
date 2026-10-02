@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { availabilityFit, meetingGroupsFor, parseCatalogTime, type MeetingTime } from "./availability";
+import { availabilityFit, meetingGroupsFor, parseCatalogTime, timePairOverlaps, type MeetingTime } from "./availability";
 import type { BusyBlock } from "./schema";
 
 const block = (day: number, begin: number, end: number, label: string | null = null): BusyBlock => ({
@@ -136,5 +136,29 @@ describe("meetingGroupsFor", () => {
 
   test("keeps lectures even if sections also have times", () => {
     expect(meetingGroupsFor([lec("09:00AM")], [lec("09:00AM"), lec("11:00AM")])).toHaveLength(1);
+  });
+});
+
+describe("timePairOverlaps", () => {
+  const at = (days: number[], begin: string, end: string): MeetingTime => ({ days, begin, end });
+
+  test("overlapping times on a shared day", () => {
+    expect(timePairOverlaps(at([1, 3], "09:00AM", "10:20AM"), at([3], "10:00AM", "10:50AM"))).toBe(true);
+  });
+
+  test("back-to-back meetings do not overlap", () => {
+    expect(timePairOverlaps(at([1], "09:00AM", "10:00AM"), at([1], "10:00AM", "10:50AM"))).toBe(false);
+  });
+
+  test("different days never overlap", () => {
+    expect(timePairOverlaps(at([1], "09:00AM", "10:20AM"), at([2], "09:00AM", "10:20AM"))).toBe(false);
+  });
+
+  test("TBA is neutral", () => {
+    expect(timePairOverlaps(at([1], "TBA", "TBA"), at([1], "09:00AM", "10:20AM"))).toBe(false);
+  });
+
+  test("afternoon times across noon", () => {
+    expect(timePairOverlaps(at([4], "11:00AM", "12:20PM"), at([4], "12:00PM", "01:20PM"))).toBe(true);
   });
 });
