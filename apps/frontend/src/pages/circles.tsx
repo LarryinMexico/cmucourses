@@ -27,16 +27,18 @@ import { PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
 import PostCard from "~/components/circles/PostCard";
 import ProfileCard from "~/components/circles/ProfileCard";
 import ShareCard from "~/components/circles/ShareCard";
+import FriendCoursesPanel from "~/components/circles/FriendCoursesPanel";
 import { FollowButton } from "~/components/circles/FollowButton";
 import MessagesPanel, {
   type OpenConversation,
 } from "~/components/circles/MessagesPanel";
 import { AuthErrorNotice } from "~/components/AuthErrorNotice";
 
-type Tab = "feed" | "people" | "messages";
+type Tab = "feed" | "people" | "courses" | "messages";
 const TABS: { id: Tab; label: string }[] = [
   { id: "feed", label: "Feed" },
   { id: "people", label: "People" },
+  { id: "courses", label: "Courses" },
   { id: "messages", label: "Messages" },
 ];
 const FEED_FILTERS: { id: FeedFilter; label: string }[] = [
@@ -261,10 +263,11 @@ const CirclesContent = () => {
   const [studyPartnersOnly, setStudyPartnersOnly] = useState(false);
   const [similarInterestsOnly, setSimilarInterestsOnly] = useState(false);
 
-  // ?tab=feed|people|messages deep links (and reloads) land on that tab.
+  // ?tab=feed|people|courses|messages deep links (and reloads) land on that tab.
   useEffect(() => {
     const t = router.query.tab;
-    if (t === "feed" || t === "people" || t === "messages") setTab(t);
+    if (t === "feed" || t === "people" || t === "courses" || t === "messages")
+      setTab(t);
   }, [router.query.tab]);
   const goTo = (next: Tab) => {
     setTab(next);
@@ -382,7 +385,9 @@ const CirclesContent = () => {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-4">
-            {tab === "feed" ? (
+            {tab === "courses" ? (
+              <FriendCoursesPanel onFindPeople={() => goTo("people")} />
+            ) : tab === "feed" ? (
               <Feed
                 filter={feedFilter}
                 setFilter={setFeedFilter}
