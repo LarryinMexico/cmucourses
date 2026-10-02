@@ -117,6 +117,11 @@ export const TimeSection = () => {
           </label>
         ))}
       </div>
+      <p className="-mt-2 text-gray-400 text-xs">
+        Saved for later: the course catalog has no format (in person or online)
+        data for current terms, so this does not affect search or generated
+        schedules yet.
+      </p>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-gray-500 text-sm">Weekly busy times</div>

@@ -38,7 +38,8 @@ export const PROFILE_SECTIONS: {
   {
     id: "time",
     title: "Time & format",
-    isComplete: (p) => p.modality !== null,
+    // Not modality: the catalog has no modality data, so that choice changes nothing yet.
+    isComplete: (p) => p.busyBlocks.length > 0,
   },
   { id: "courses", title: "Courses", isComplete: (p) => p.courses.length > 0 },
   {

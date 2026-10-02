@@ -365,6 +365,9 @@ const careerScoreFor = (
   return { raw, reasons: [...reasonSkills] };
 };
 
+// Dead for current terms: in the 2026-09-19 catalog snapshot every Spring and Fall 2026 meeting
+// time has an empty building, room and location, so this returns null and the modality
+// preference never moves a score. Re-measure with scripts/catalog/measure-modality.mjs.
 const inferredModality = (times: MeetingTime[]): Modality | null => {
   const known = times
     .map((time) => `${time.location ?? ""} ${time.building ?? ""} ${time.room ?? ""}`.trim())
