@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import type {
   FeedPage,
+  FriendCourses,
   PostKind,
   ScheduleComment,
   SocialDirectory,
@@ -25,6 +26,7 @@ export const backendUrl = () =>
 const DIRECTORY_KEY = "socialDirectory";
 const FEED_KEY = "circleFeed";
 const COMMENTS_KEY = "postComments";
+const FRIEND_COURSES_KEY = "friendCourses";
 
 export type FeedFilter = "all" | "following" | "mine";
 
@@ -68,6 +70,21 @@ export const useSocialDirectory = () => {
     enabled: !!isSignedIn,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+  });
+};
+
+/**
+ * The current and upcoming courses of everyone you follow, limited to what each of them shares
+ * (filtered on the server). Used by a course page's "Friends in this course" and Circles' Courses.
+ */
+export const useFriendCourses = () => {
+  const { isSignedIn, userId, getToken } = useAuth();
+  return useQuery({
+    queryKey: [FRIEND_COURSES_KEY, userId],
+    queryFn: () =>
+      post<{ friends: FriendCourses[] }>(getToken, "/social/friend-courses"),
+    select: (data) => data.friends,
+    enabled: !!isSignedIn,
   });
 };
 
@@ -118,6 +135,7 @@ const useRefreshSocial = () => {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: [FEED_KEY, userId] }),
       queryClient.invalidateQueries({ queryKey: [DIRECTORY_KEY, userId] }),
+      queryClient.invalidateQueries({ queryKey: [FRIEND_COURSES_KEY, userId] }),
     ]);
 };
 

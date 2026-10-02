@@ -215,3 +215,43 @@ export interface MyPostSummary {
   semester: PublishedSchedule["semester"];
   year: string;
 }
+
+/** Why a followed student is listed against a course. */
+export type FriendCourseSource = "IN_PROGRESS" | "PLANNED" | "POST";
+
+export interface FriendCourseEntry {
+  courseID: string;
+  source: FriendCourseSource;
+  /** For a planned course or a post: the term it is for. */
+  semester?: string;
+  year?: string;
+  /** For a post: planned or actual schedule. */
+  kind?: PostKind;
+}
+
+/** One followed student's current and upcoming courses, as far as they share them. */
+export interface FriendCourses {
+  profileID: string;
+  displayName: string;
+  courses: FriendCourseEntry[];
+}
+
+const TERM_ORDER: Record<string, number> = { spring: 0, summer: 1, fall: 2 };
+
+/** The term a date falls in: spring through May, summer June-August, fall from September. */
+export const termOf = (date: Date): { semester: "spring" | "summer" | "fall"; year: number } => {
+  const month = date.getMonth();
+  return { semester: month <= 4 ? "spring" : month <= 7 ? "summer" : "fall", year: date.getFullYear() };
+};
+
+/**
+ * Whether a term is the current one or later. A planned course or a post for a past term says
+ * what someone took, not what they are taking or will take, so friend course lists skip it.
+ */
+export const isCurrentOrFutureTerm = (semester: string, year: string | number, now: Date): boolean => {
+  const order = TERM_ORDER[semester];
+  const y = Number(year);
+  if (order === undefined || !Number.isInteger(y)) return false;
+  const current = termOf(now);
+  return y > current.year || (y === current.year && order >= TERM_ORDER[current.semester]!);
+};

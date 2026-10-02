@@ -10,7 +10,7 @@ import { getInstructors } from "~/controllers/instructors";
 import { getGeneds } from "~/controllers/geneds";
 import { getSchedules } from "~/controllers/schedules";
 import { deleteRating, getOwnRating, getRatings, submitRating } from "~/controllers/ratings";
-import { getSocialDirectory, updateFollow } from "~/controllers/social";
+import { getFriendCourses, getSocialDirectory, updateFollow } from "~/controllers/social";
 import {
   addPostComment,
   deletePost,
@@ -66,6 +66,7 @@ app.route("/user/rating").patch(authLimiter, requireUser, submitRating);
 app.route("/user/rating").delete(authLimiter, requireUser, deleteRating);
 
 app.route("/social/directory").post(authLimiter, requireUser, getSocialDirectory);
+app.route("/social/friend-courses").post(authLimiter, requireUser, getFriendCourses);
 app.route("/user/social/follow").patch(authLimiter, requireUser, updateFollow);
 app.route("/social/feed").post(authLimiter, requireUser, getFeed);
 app.route("/user/posts").patch(authLimiter, requireUser, sharePost).delete(authLimiter, requireUser, deletePost);

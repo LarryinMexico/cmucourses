@@ -13,6 +13,8 @@ import {
   postCommentInputSchema,
   postReactionInputSchema,
   sharePostInputSchema,
+  isCurrentOrFutureTerm,
+  termOf,
 } from "./social";
 
 describe("social schemas", () => {
@@ -114,5 +116,30 @@ describe("post kinds", () => {
     expect(feedQuerySchema.parse({}).kind).toBeUndefined();
     expect(feedQuerySchema.parse({ kind: "ACTUAL" }).kind).toBe("ACTUAL");
     expect(feedQuerySchema.safeParse({ kind: "BOTH" }).success).toBe(false);
+  });
+});
+
+describe("isCurrentOrFutureTerm", () => {
+  const oct2026 = new Date(2026, 9, 2);
+
+  test("the current term and later count", () => {
+    expect(isCurrentOrFutureTerm("fall", "2026", oct2026)).toBe(true);
+    expect(isCurrentOrFutureTerm("spring", "2027", oct2026)).toBe(true);
+  });
+
+  test("earlier terms do not", () => {
+    expect(isCurrentOrFutureTerm("summer", "2026", oct2026)).toBe(false);
+    expect(isCurrentOrFutureTerm("fall", "2025", oct2026)).toBe(false);
+  });
+
+  test("month boundaries", () => {
+    expect(termOf(new Date(2026, 4, 31)).semester).toBe("spring");
+    expect(termOf(new Date(2026, 5, 1)).semester).toBe("summer");
+    expect(termOf(new Date(2026, 8, 1)).semester).toBe("fall");
+  });
+
+  test("nonsense is not current", () => {
+    expect(isCurrentOrFutureTerm("winter", "2026", oct2026)).toBe(false);
+    expect(isCurrentOrFutureTerm("fall", "soon", oct2026)).toBe(false);
   });
 });

@@ -4,6 +4,9 @@ import {
   SOCIAL_REACTIONS,
   labelOf,
   type CirclePost,
+  type FriendCourseEntry,
+  type FriendCourses,
+  isCurrentOrFutureTerm,
   type PostAuthor,
   type PostKind,
   type SocialDirectoryProfile,
@@ -158,4 +161,40 @@ export const encodeCursor = (post: Pick<PostRow, "id" | "updatedAt">): string =>
 export const decodeCursor = (cursor: string): { updatedAt: Date; id: string } => {
   const at = cursor.lastIndexOf("_");
   return { updatedAt: new Date(cursor.slice(0, at)), id: cursor.slice(at + 1) };
+};
+
+/**
+ * A followed student's current and upcoming courses, using only what they let others see:
+ * in-progress and planned courses when their Courses section is public, and their Circles posts
+ * (which followers can already read) for the current term or later. Taken courses are left out;
+ * this is about who is taking a course, not who took it. Nothing carries a Clerk id.
+ */
+export const toFriendCourses = (
+  profile: DirectoryProfileRow & { plannedCourses: { courseID: string; semester: string; year: string }[] },
+  posts: Pick<PostRow, "kind" | "semester" | "year" | "courses">[],
+  now: Date
+): FriendCourses => {
+  const courses: FriendCourseEntry[] = [];
+  if (profile.visibility.courses === "PUBLIC") {
+    for (const course of profile.courses) {
+      if (course.status === "IN_PROGRESS") courses.push({ courseID: course.courseID, source: "IN_PROGRESS" });
+    }
+    for (const planned of profile.plannedCourses) {
+      if (!isCurrentOrFutureTerm(planned.semester, planned.year, now)) continue;
+      courses.push({ courseID: planned.courseID, source: "PLANNED", semester: planned.semester, year: planned.year });
+    }
+  }
+  for (const post of posts) {
+    if (!isCurrentOrFutureTerm(post.semester, post.year, now)) continue;
+    for (const course of post.courses) {
+      courses.push({
+        courseID: course.courseID,
+        source: "POST",
+        semester: post.semester,
+        year: post.year,
+        kind: post.kind,
+      });
+    }
+  }
+  return { profileID: profile.id, displayName: profile.displayName || "CMU student", courses };
 };

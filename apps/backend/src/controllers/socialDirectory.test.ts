@@ -5,6 +5,7 @@ import {
   encodeCursor,
   toCirclePost,
   toDirectoryProfile,
+  toFriendCourses,
   toPostAuthor,
   type DirectoryProfileRow,
   type PostRow,
@@ -154,5 +155,41 @@ describe("feed cursor", () => {
       updatedAt: new Date("2026-09-02T00:00:00Z"),
       id: "74b7f0c2a1d3e4f5a6b7c8d0",
     });
+  });
+});
+
+describe("toFriendCourses", () => {
+  const OCT_2026 = new Date(2026, 9, 2);
+  const friend = (overrides: Partial<DirectoryProfileRow> = {}) => ({
+    ...row(overrides),
+    plannedCourses: [
+      { courseID: "10-301", semester: "spring", year: "2027" },
+      { courseID: "21-241", semester: "spring", year: "2026" },
+    ],
+  });
+  const fallPost = { kind: "PLANNED" as const, semester: "fall", year: "2026", courses: [{ courseID: "36-401" }] };
+  const oldPost = { kind: "ACTUAL" as const, semester: "fall", year: "2025", courses: [{ courseID: "15-112" }] };
+
+  test("private courses stay hidden; posts still count", () => {
+    const result = toFriendCourses(friend(), [fallPost], OCT_2026);
+    expect(result.courses).toEqual([
+      { courseID: "36-401", source: "POST", semester: "fall", year: "2026", kind: "PLANNED" },
+    ]);
+  });
+
+  test("public courses add in-progress and upcoming planned courses, never taken ones", () => {
+    const result = toFriendCourses(friend({ visibility: { ...PRIVATE, courses: "PUBLIC" } }), [], OCT_2026);
+    expect(result.courses.map((c) => `${c.source}:${c.courseID}`)).toEqual(["IN_PROGRESS:15-213", "PLANNED:10-301"]);
+  });
+
+  test("posts and plans for past terms are skipped", () => {
+    expect(toFriendCourses(friend(), [oldPost], OCT_2026).courses).toEqual([]);
+  });
+
+  test("names the friend by profile id and display name only, never the Clerk id", () => {
+    const result = toFriendCourses(friend(), [fallPost], OCT_2026);
+    expect(result.profileID).toBe("64b7f0c2a1d3e4f5a6b7c8d9");
+    expect(result.displayName).toBe("Ada");
+    expect(JSON.stringify(result)).not.toContain("user_them");
   });
 });

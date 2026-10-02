@@ -1,8 +1,8 @@
 import { RequestHandler } from "express";
 import db from "@cmucourses/db";
-import { followInputSchema, type MyPostSummary, type SocialDirectory } from "@cmucourses/profile";
+import { followInputSchema, type FriendCourses, type MyPostSummary, type SocialDirectory } from "@cmucourses/profile";
 import { UserLocals } from "./user";
-import { toDirectoryProfile } from "./socialDirectory";
+import { toDirectoryProfile, toFriendCourses } from "./socialDirectory";
 
 type ErrorBody = { error: string };
 
@@ -122,6 +122,48 @@ export const updateFollow: RequestHandler<
       });
     }
     res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * The current and upcoming courses of everyone the caller follows (the same "friend" as the
+ * follow gate on reactions and comments), filtered by each person's visibility in
+ * toFriendCourses. People who share nothing are left out.
+ */
+export const getFriendCourses: RequestHandler<
+  unknown,
+  { friends: FriendCourses[] } | ErrorBody,
+  { token: string },
+  unknown,
+  UserLocals
+> = async (_req, res, next) => {
+  const me = res.locals.userId;
+  try {
+    const follows = await db.follows.findMany({ where: { followerUserId: me } });
+    if (follows.length === 0) {
+      res.json({ friends: [] });
+      return;
+    }
+    const profiles = await db.profiles.findMany({
+      where: { id: { in: follows.map((follow) => follow.followedProfileId) }, clerkUserId: { not: me } },
+    });
+    const posts = await db.circlePosts.findMany({
+      where: { authorUserId: { in: profiles.map((profile) => profile.clerkUserId) } },
+      select: { authorUserId: true, kind: true, semester: true, year: true, courses: true },
+    });
+    const now = new Date();
+    const friends = profiles
+      .map((profile) =>
+        toFriendCourses(
+          profile,
+          posts.filter((post) => post.authorUserId === profile.clerkUserId),
+          now
+        )
+      )
+      .filter((friend) => friend.courses.length > 0);
+    res.json({ friends });
   } catch (error) {
     next(error);
   }

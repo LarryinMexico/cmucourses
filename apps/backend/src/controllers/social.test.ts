@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { fakeDb, resetFakeDb } from "../test/fakeDb";
 import { call } from "../test/http";
-import { getSocialDirectory } from "./social";
+import { getFriendCourses, getSocialDirectory } from "./social";
 
 const THEM = "64b7f0c2a1d3e4f5a6b7c8d9";
 const ME = "74b7f0c2a1d3e4f5a6b7c8d0";
@@ -93,5 +93,44 @@ describe("getSocialDirectory", () => {
     ).people;
     expect(person).toMatchObject({ following: true, followsMe: true, postCount: 1, postedCourseIDs: ["15-213"] });
     expect(JSON.stringify(body)).not.toContain("user_them");
+  });
+});
+
+describe("getFriendCourses", () => {
+  const friendRow = { ...themRow, plannedCourses: [], visibility: { ...PRIVATE, courses: "PUBLIC" } };
+
+  test("asks only for the profiles the caller follows, never the caller", async () => {
+    fakeDb.follows!.findMany!.mockResolvedValue([{ followedProfileId: THEM }] as never);
+    fakeDb.profiles!.findMany!.mockResolvedValue([friendRow] as never);
+    await call(getFriendCourses as never, "user_me");
+    const [args] = fakeDb.profiles!.findMany!.mock.calls[0] as [{ where: object }];
+    expect(args.where).toEqual({ id: { in: [THEM] }, clerkUserId: { not: "user_me" } });
+    expect(fakeDb.follows!.findMany!.mock.calls[0]![0]).toEqual({ where: { followerUserId: "user_me" } });
+  });
+
+  test("following nobody answers an empty list without reading profiles", async () => {
+    const { body } = await call(getFriendCourses as never, "user_me");
+    expect(body).toEqual({ friends: [] });
+    expect(fakeDb.profiles!.findMany!).not.toHaveBeenCalled();
+  });
+
+  test("a followed student who shares nothing is left out", async () => {
+    fakeDb.follows!.findMany!.mockResolvedValue([{ followedProfileId: THEM }] as never);
+    fakeDb.profiles!.findMany!.mockResolvedValue([
+      { ...themRow, plannedCourses: [], courses: [{ courseID: "15-213", status: "IN_PROGRESS" }] },
+    ] as never);
+    const { body } = await call(getFriendCourses as never, "user_me");
+    expect(body).toEqual({ friends: [] });
+  });
+
+  test("returns a public in-progress course", async () => {
+    fakeDb.follows!.findMany!.mockResolvedValue([{ followedProfileId: THEM }] as never);
+    fakeDb.profiles!.findMany!.mockResolvedValue([
+      { ...friendRow, courses: [{ courseID: "15-213", status: "IN_PROGRESS" }] },
+    ] as never);
+    const { body } = await call(getFriendCourses as never, "user_me");
+    expect(body).toEqual({
+      friends: [{ profileID: THEM, displayName: "Ada", courses: [{ courseID: "15-213", source: "IN_PROGRESS" }] }],
+    });
   });
 });
