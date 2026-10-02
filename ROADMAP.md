@@ -2,7 +2,7 @@
 
 The team's feature plan, sourced from the Mural feature decomposition board. Version tags (V1-V4) mirror the Mural Features Decomposition board; section names follow the Mural cards as closely as possible so this file can be cross-referenced directly against the board.
 
-> **Status, 2026-09-23.** Every item below is built. This round was verified by unit tests (profile 168, backend 72, frontend 48) and by running the real handlers and search queries against a real local MongoDB replica set. The main flows were then driven in a real browser session against that local database (see "Known limitations" for exactly what was and was not).
+> **Status, 2026-10-02.** Every item below is built except the two filter cards marked **Not applicable** (modality and mini), which the catalog cannot support. The 2026-10-02 round (see "Mural round 2026-10-02" below) was verified by unit tests (profile 192, backend 156, frontend 137), by running the changed queries against a real local MongoDB replica set, and, for the manual-schedule conflict warning only, in a browser. Every other screen it changed still needs a signed-in browser check; that list is at the end of this file.
 
 ## Vision
 
@@ -16,13 +16,33 @@ Done:
 - Department dropdown
 - Course Level dropdown (undergrad/grad)
 - Unit slider (0-24)
-- Offered in dropdown — semesters, plus Summer One / Two / All
+- Offered in dropdown — semesters, plus Summer One / Two / All. A **mini** option is not applicable; see "Why there is no mini filter" below
 
 Also done (the first two were sitting in the Mural board's Done column with no implementation; Sprint Review deducts 1 point for anything in Done that turns out not to be done):
 - [x] Restrict results to morning/afternoon/evening sections — the **Class Times** filter (`ClassTimesFilter.tsx`), matched server-side in the search aggregation
 - [x] Sort or highlight results by best fit against saved availability — implemented as **highlight**: an availability badge on every course card, comparing `profile.busyBlocks` against the course's lecture times (`packages/profile/availability.ts`)
 - [x] Only courses that fit my availability — a checkbox in the schedule filters, decided **on the backend** so every page is full and the page count is right (`fitAvailabilityStage`, `apps/backend/src/controllers/courseQuery.ts`); Match-my-goals lists, which never call `/search`, keep the client-side check
 - [x] Filter by summer sub-session (Summer One / Two / All) — the catalog records them; a chosen sub-session matches only itself and a plain Summer matches all of them
+- [ ] ~~Modality filter (in-person/online/hybrid), which would override the profile's default~~ — **Not applicable: the catalog has no modality data** (decision 2026-09-23, re-measured 2026-10-02). This card should leave the Done column. See below.
+- [ ] ~~Mini semester filter~~ — **Not applicable: the catalog has no mini field for fall or spring** (decision 2026-09-23); see below.
+
+#### Why there is no modality filter
+
+The catalog has no modality field, and the only proxies (a meeting's building, room and location) are empty for every current term. Measured 2026-10-02 on the cached catalog (snapshot of 2026-09-19) with `node scripts/catalog/measure-modality.mjs`:
+
+| Term | Meeting times | With building | With room | With location | Remote-like | DNM |
+| --- | --- | --- | --- | --- | --- | --- |
+| Fall 2024 | 8,607 | 6,121 | 4,481 | 0 | 141 | 1,781 |
+| Spring 2025 | 8,417 | 5,761 | 4,195 | 0 | 99 | 1,665 |
+| Fall 2025 | 8,147 | 238 | 171 | 0 | 6 | 73 |
+| Spring 2026 | 7,894 | 0 | 0 | 0 | 0 | 0 |
+| Fall 2026 | 8,122 | 0 | 0 | 0 | 0 | 0 |
+
+A filter built on these would return nothing for the terms students browse. The **profile's modality preference** is kept (stored, editable) but has no effect: the generator's `inferredModality` returns null for every 2026 meeting, so the preference never changes a score. Since 2026-10-02 the Profile says so under the control ("Saved for later…") and the Time & format section counts as complete with busy times instead of a modality. The "Time not set" Class Times option (`begin` is `TBA` in about half of Fall 2026) is what the data does support.
+
+#### Why there is no mini filter
+
+Measured against the catalog (`schedules` collection, 2026-09-23, ~48.8k schedule documents): fall and spring documents carry **no `session` value at all**, so CMU's Mini 1-4 cannot be told apart from a full semester. Only summer has sub-terms (`summer one` 545, `summer two` 802, `summer all` 1581, `qatar summer` 120, unset 310). A mini filter is not possible until the upstream data carries one.
 
 #### V1 filter fixes (from the 2026-09-23 audit)
 
@@ -34,7 +54,7 @@ Also done (the first two were sitting in the Mural board's Done column with no i
 > Implemented on branch `feature/student-profile`; design in `docs/superpowers/specs/2026-09-11-student-profile-design.md`. Sign-in reuses Clerk — no separate account system. Beyond the items below, this also added career goals, skills, course load, per-section public/private visibility, and first-login onboarding.
 
 - [x] Account creation (reuses Clerk sign-in)
-- [x] Set a default modality preference
+- [x] Set a default modality preference — stored and editable, but **no effect** until the catalog has modality data (see "Why there is no modality filter"); the Profile says so
 - [x] Set recurring weekly busy times (= availability)
 - [x] Edit availability at any time
 - [x] Edit profile/preferences at any time
@@ -140,12 +160,49 @@ Also done (the first two were sitting in the Mural board's Done column with no i
   rework fixed why two real accounts could not message: invisible profiles, a directory that never
   refreshed, one-way follows labelled "Connected", Message doing nothing visible, hidden errors, and
   caches shared between accounts in one browser
+- [x] Share planned schedule / Share actual schedule (2026-10-02) — a post is **Planned** or **Actual** (`circlePosts.kind`), one of each per student per semester; Share asks which, posts show a badge, and the feed filters by it. Existing posts become Actual through `bun run migrate-post-kind` (must run before `db-migrate`; see below)
+- [x] See friends taking the same course (2026-10-02) — a course page's "Friends in this course" card lists the people you follow who are taking or planning it, with how (taking now, planning for a term, on their planned/actual post)
+- [x] Discover courses through friends (2026-10-02) — Circles' **Courses** tab lists what the people you follow are taking or planning that is not on your profile yet, most friends first
+  - Both read `POST /social/friend-courses`. "Friend" = someone you follow. Their in-progress and planned courses count only if their **Courses** section is public (the same rule the directory already used); their Circles posts always count (followers can read them anyway). Only the current term or later counts, and taken courses never do
 - Demo data: `bun run demo-seed` (dry run first; `--yes`, `--with-real-users`, `--remove`,
   `--migrate-old`) fills Circles with fake `demo_` students
+
+## Mural round 2026-10-02
+
+Branch `fix/mural-round-2026-10`, one commit per item.
+
+| Item | Status | How it was verified |
+| --- | --- | --- |
+| Rate limiting (tech debt) | Done | Unit tests (61st/301st request → 429, per-user keys, cache TTL); curl loop on a local backend: requests 1-300 → 200, 301 → 429 with `Retry-After`. **Not checked on the deployment**: assumes one instance and one proxy hop |
+| Course filter input validation (tech debt) | Done | 34 unit tests (malicious inputs, every parameter shape the frontend sends); 12 frontend query shapes against the local catalog return the same `totalDocs` and first results as `main`; malicious inputs → 400 |
+| SSO failure handling (tech debt) | Done for the agreed cases (missing / expired / not-yet-valid token) | 23 unit tests with real RS256 tokens; curl on a local backend shows the new `{ error, code }` 401s. **Browser not checked** (needs a signed-in session) |
+| Remove ScottyLabs redirect | Done | `GET /?__clerk_status=verified` on the local frontend answers 200, no redirect. Sign-in round trip **not browser-checked** |
+| Detect time conflicts | Done | 8 jest + 5 profile tests; **browser-checked** on /schedules (count, "Conflicts with …" lines, "(conflicts)" options; nothing blocked) |
+| Share planned / actual | Done | Unit tests; on a local replica set: `main` schema + old posts → migration (dry run, then `--yes`) → `db push` → both kinds shared for one semester, re-share replaces, feed kind filter. **Not on Atlas; browser not checked** |
+| See friends taking a course | Done | Unit tests; on a local replica set a private profile's in-progress course stays hidden, posts show, no Clerk id returned. **Browser not checked** |
+| Discover courses through friends | Done | Jest for ranking/exclusion; same endpoint as above. **Browser not checked** |
+| Modality | Card not applicable; Profile labelled | Measured (table above); completeness test |
+
+Details:
+- **Search validation.** `/courses/search` runs every query parameter through `searchQuerySchema` (`apps/backend/src/controllers/courseQuery.ts`); invalid input is a 400 with `issues`, unknown keys are ignored. Before this, `levels` went into a MongoDB regex unescaped, `levels[$ne]=1` reached the pipeline as an operator, and `?page=abc` **crashed the whole backend process** (the parse threw outside the `try`).
+- **Rate limits** (`apps/backend/src/rateLimit.ts`): every route 300 requests/min per IP; routes that verify a token 120/min per user (token subject, else IP). The plan said 60, but polling alone (thread 5s, conversations 15s, feed head 30s) is ~18/min per tab and tabs share the budget. Counters are in memory, so per instance. Sign-in itself is Clerk's: 3 attempts per 10s per IP and a 1-hour lockout after 10 failures by default ([rate limits](https://clerk.com/docs/guides/how-clerk-works/system-limits), [user lockout](https://clerk.com/docs/guides/secure/user-lockout)). The CMU-email answer from Clerk is cached 5 minutes per user, because Clerk's Backend API allows 1000 requests/10s for the whole production app.
+- **Sign-in errors.** `verifyUserToken` throws `AuthError` with a code; both middlewares answer 401 `{ error, code }`. The old manual `exp`/`nbf` checks could never run (jsonwebtoken throws first) and `isUser` sent an Error that serialized to `{}`. The frontend no longer retries a 401/429 and shows the reason with "Sign in again" on Profile, Careers, Requirements, Circles (feed, people, share) and saved schedules. A Clerk outage is still a 401 (code `auth_service_error`), not a 503; azp mismatch and non-CMU accounts are tested but not changed.
+- **Not done in this round:** other handlers may also throw outside a `try` and crash the process the way `/courses/search` did; not audited.
 
 ## Known limitations (2026-09-23)
 
 - **UX fix round (2026-09-27).** Landed: Circles (feed load-more errors, Share card on phones, inline confirms for deleting posts/comments/saved schedules and a mutual unfollow, Messages unread count, message retry and scroll, Back closes a thread, week-grid overlaps and unplaced courses), Schedules (applying a generated option keeps the options and swaps earlier pool picks; saved-schedule rename/delete/stale-id fixes), Search (empty/error states, Offered-in from the current year, Match my goals filtered before paging, schedule-filter pills), Profile (header badges, busy-label switch beside busy times, 00:00 latest end saves, phone widths), and loading/error/variable-unit fixes on Careers, Requirements and Ratings. Verified by unit tests and `tsc` only — **no browser check yet** for this round (the automation Chrome tab would not load Clerk); an earlier partial browser check on 2026-09-23 covered the pre-fix flows.
-- **Backend tests** (`bun test` in `apps/backend`, 72) mock the database, so they prove what a handler asks for, not that MongoDB accepts it; every query added this round was also run against a real local replica set, which found two bugs a mock cannot (Prisma's `readAt: null` does not match a missing field, so unread counts were always 0). Not covered by any automated test: the search aggregation itself (verified by comparison against the client, not in CI), token verification, and FCE.
+- **Backend tests** (`bun test` in `apps/backend`, 72) mock the database, so they prove what a handler asks for, not that MongoDB accepts it; every query added this round was also run against a real local replica set, which found two bugs a mock cannot (Prisma's `readAt: null` does not match a missing field, so unread counts were always 0). Not covered by any automated test: the search aggregation itself (verified by comparison against the client, not in CI) and FCE. Token verification has tests since 2026-10-02.
 - Messages are polled, not pushed. Conversation lists scan the latest 1,000 messages, threads show the latest 100, comments the latest 200, the directory the first 100 profiles.
 - The semester plan checks units only, not hours per week; requirements exist for MISM only; the generator pool holds at most 12 courses.
+- Modality and mini filters are not applicable until the catalog carries those fields.
+
+## Still needs a browser check (signed in)
+
+- Sign in and come back: no redirect to courses.scottylabs.org
+- An expired or invalid session: Profile / Circles / saved schedules show the reason and "Sign in again", without a long spinner
+- Circles Share: Planned / Actual choice, "Replaces your … post" per kind, the badge on posts, the All / Planned / Actual feed filter
+- A course page's "Friends in this course" (with and without friends listing it)
+- Circles → Courses tab (ranking, empty states, "Find people to follow")
+- Profile → Time & format: the modality note
+- Hitting a rate limit shows the "Too many requests" message rather than hanging
