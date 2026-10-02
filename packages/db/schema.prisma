@@ -72,7 +72,7 @@ model courses {
   units        String
   schedules    schedules[]
 
-  @@fulltext([name, department, desc, prereqString], map: "text")
+  @@fulltext([courseID, name, department, desc, prereqString], map: "text")
 }
 
 model fces {
@@ -283,6 +283,8 @@ model profiles {
   plannedCourses      ProfilesPlannedCourses[]
   visibility          ProfilesVisibility
   savedFilters        ProfilesSavedFilters?
+  /// starred courses (Saved); private
+  savedCourses        String[]
   onboardedAt         DateTime?
   createdAt           DateTime                     @default(now())
   updatedAt           DateTime                     @updatedAt

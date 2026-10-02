@@ -4,6 +4,7 @@ import {
   DegreeLevel,
   Modality,
   ProfileSemester,
+  Workload,
 } from "@cmucourses/profile";
 import { SelectOption } from "./fields";
 
@@ -100,4 +101,10 @@ export const timeToMinutes = (time: string): number | null => {
   )
     return null;
   return hours * 60 + minutes;
+};
+
+export const EMPTY_WORKLOAD: Workload = {
+  unitsMin: null,
+  unitsMax: null,
+  hoursPerWeek: null,
 };

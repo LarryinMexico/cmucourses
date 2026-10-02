@@ -4,14 +4,14 @@ import {
   CourseRecord,
   CourseStatus,
   LIMITS,
-  Profile,
 } from "@cmucourses/profile";
 import { useCourseNames } from "~/app/api/course";
 import Link from "~/components/Link";
 import { SECONDARY_BUTTON_CLASS, Select } from "./fields";
 import { PAST_YEAR_OPTIONS, SEMESTER_OPTIONS, STATUS_OPTIONS } from "./options";
 import { CoursePicker } from "./CoursePicker";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import { ProfileSection } from "./ProfileSection";
+import { useDraftField } from "./ProfileDraftContext";
 
 const RecordFields = ({
   record,
@@ -49,8 +49,8 @@ const RecordFields = ({
   </>
 );
 
-export const CoursesSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft(profile.courses);
+export const CoursesSection = () => {
+  const { draft, setDraft } = useDraftField("courses");
   const { data: names } = useCourseNames();
   const [adding, setAdding] = useState<{
     courseID: string | null;
@@ -80,10 +80,7 @@ export const CoursesSection = ({ profile }: { profile: Profile }) => {
     <ProfileSection
       id="courses"
       title="Courses taken / in progress"
-      profile={profile}
       shareable="courses"
-      dirty={dirty}
-      patch={{ courses: draft }}
     >
       {draft.length === 0 && (
         <div className="text-gray-400 text-sm">No courses yet.</div>

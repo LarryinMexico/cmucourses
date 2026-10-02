@@ -1,6 +1,6 @@
 import React from "react";
 import { XMarkIcon } from "@heroicons/react/20/solid";
-import { BusyBlock, LIMITS, Profile } from "@cmucourses/profile";
+import { BusyBlock, LIMITS } from "@cmucourses/profile";
 import { classNames } from "~/app/utils";
 import { INPUT_CLASS, SECONDARY_BUTTON_CLASS, Select } from "./fields";
 import {
@@ -10,11 +10,8 @@ import {
   MODALITY_OPTIONS,
   timeToMinutes,
 } from "./options";
-import {
-  ProfileSection,
-  useDraft,
-  VisibilityToggle,
-} from "./ProfileSection";
+import { ProfileSection, VisibilityToggle } from "./ProfileSection";
+import { useDraftFields } from "./ProfileDraftContext";
 
 // Lets the preference be cleared back to "not set".
 
@@ -89,12 +86,12 @@ const BusyBlockRow = ({
 const endOfDay = (minutes: number | null) =>
   minutes === 0 ? 1440 : minutes;
 
-export const TimeSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft({
-    modality: profile.modality,
-    busyBlocks: profile.busyBlocks,
-    schedulePreferences: profile.schedulePreferences,
-  });
+export const TimeSection = () => {
+  const { draft, setDraft } = useDraftFields([
+    "modality",
+    "busyBlocks",
+    "schedulePreferences",
+  ] as const);
   const setBlocks = (busyBlocks: BusyBlock[]) =>
     setDraft({ ...draft, busyBlocks });
 
@@ -104,9 +101,6 @@ export const TimeSection = ({ profile }: { profile: Profile }) => {
       title="Time & format"
       description="Weekly busy times help avoid conflicts and appear on your Circles posts."
       headerBadge="none"
-      profile={profile}
-      dirty={dirty}
-      patch={draft}
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-500 text-sm">
         <div className="mr-2">Preferred format</div>
@@ -127,7 +121,6 @@ export const TimeSection = ({ profile }: { profile: Profile }) => {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-gray-500 text-sm">Weekly busy times</div>
           <VisibilityToggle
-            profile={profile}
             section="busyLabels"
             label="Show what each busy time is for on Circles"
           />

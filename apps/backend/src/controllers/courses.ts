@@ -12,6 +12,7 @@ import { RequestHandler } from "express";
 import db, { Prisma } from "@cmucourses/db";
 import {
   catalogTimeToMinutes,
+  courseIDsInKeywords,
   fitAvailabilityStage,
   parseBusyBlocks,
   parseSessions,
@@ -161,6 +162,11 @@ export const getFilteredCourses: RequestHandler<
 
   if (req.query.keywords !== undefined) {
     matchStage.$text = { $search: req.query.keywords };
+    const exactIDs = courseIDsInKeywords(req.query.keywords);
+    if (exactIDs.length > 0) {
+      addedFields.exactMatch = { $in: ["$courseID", exactIDs] };
+      sortKeys.push(["exactMatch", -1]);
+    }
     sortKeys.push(["score", { $meta: "textScore" }]);
     addedFields.relevance = { $meta: "textScore" };
   }

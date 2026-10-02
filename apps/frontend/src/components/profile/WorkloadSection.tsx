@@ -1,27 +1,17 @@
 import React from "react";
-import { LIMITS, Profile, Workload } from "@cmucourses/profile";
+import { LIMITS } from "@cmucourses/profile";
 import { OptionalNumberInput } from "./fields";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import { ProfileSection } from "./ProfileSection";
+import { useDraftField } from "./ProfileDraftContext";
 
-const EMPTY_WORKLOAD: Workload = {
-  unitsMin: null,
-  unitsMax: null,
-  hoursPerWeek: null,
-};
-
-export const WorkloadSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft(
-    profile.workload ?? EMPTY_WORKLOAD
-  );
+export const WorkloadSection = () => {
+  const { draft, setDraft } = useDraftField("workload");
 
   return (
     <ProfileSection
       id="workload"
       title="Course load"
       description="What a semester should look like for you."
-      profile={profile}
-      dirty={dirty}
-      patch={{ workload: draft }}
     >
       <div className="flex flex-wrap items-baseline gap-2 text-gray-500 text-sm">
         <div className="mr-2 w-40">Units per semester</div>

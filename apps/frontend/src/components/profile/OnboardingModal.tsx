@@ -7,6 +7,7 @@ import {
   TransitionChild,
 } from "@headlessui/react";
 import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/router";
 import { Academic } from "@cmucourses/profile";
 import { useFetchProfile, useUpdateProfile } from "~/app/api/profile";
 import { AcademicFields } from "./AcademicSection";
@@ -18,7 +19,8 @@ const STEPS = 2;
 
 /**
  * Shown once to a signed-in user whose profile has never been onboarded. Finishing or skipping
- * both mark it done on the server, so it won't come back on other devices either.
+ * both mark it done on the server, so it won't come back on other devices either. `?welcome=1`
+ * (the Profile page's "Run the welcome setup again") opens it again on demand.
  */
 export const OnboardingModal = () => {
   const { isSignedIn } = useAuth();
@@ -31,8 +33,25 @@ export const OnboardingModal = () => {
   const [dismissed, setDismissed] = useState(false);
   const [seeded, setSeeded] = useState(false);
 
+  const router = useRouter();
+  const reopened = router.query.welcome === "1";
   const open =
-    !!isSignedIn && !!profile && profile.onboardedAt === null && !dismissed;
+    !!isSignedIn &&
+    !!profile &&
+    ((profile.onboardedAt === null && !dismissed) || reopened);
+
+  // Reopened on demand: start over from step 1 with what the profile holds now.
+  useEffect(() => {
+    if (!reopened) return;
+    setStep(1);
+    setSeeded(false);
+  }, [reopened]);
+
+  const closeReopened = () => {
+    const query = { ...router.query };
+    delete query.welcome;
+    void router.replace({ query }, undefined, { shallow: true });
+  };
 
   // Seed once from whatever is already on the profile (user may have saved on /profile first).
   useEffect(() => {
@@ -43,15 +62,23 @@ export const OnboardingModal = () => {
   }, [profile, seeded]);
 
   // Overlay / Esc only hides for this session; only "Skip for now" writes completeOnboarding.
-  const dismissForSession = () => setDismissed(true);
+  const dismissForSession = () => {
+    setDismissed(true);
+    if (reopened) closeReopened();
+  };
 
   const skip = () => {
     setDismissed(true);
+    if (reopened) {
+      closeReopened();
+      return;
+    }
     update.mutate({ completeOnboarding: true });
   };
 
   const finish = () => {
     setDismissed(true);
+    if (reopened) closeReopened();
     // Only PATCH sections the modal actually edits, seeded from profile so Finish never
     // wipes data the user already saved on the Profile page.
     update.mutate({

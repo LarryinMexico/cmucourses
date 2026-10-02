@@ -55,3 +55,27 @@ export const loadCatalog = (catalogDir) => {
 
   return { courses, schedules };
 };
+
+/** The fields of the courses text index; must match `@@fulltext` on `courses` in schema.prisma. */
+export const COURSE_TEXT_INDEX_FIELDS = ["courseID", "name", "department", "desc", "prereqString"];
+
+/**
+ * Makes the courses text index cover COURSE_TEXT_INDEX_FIELDS. A collection allows one text index,
+ * and createIndex will not change an existing one's fields (it fails with a conflict), so an older
+ * index - e.g. the one without courseID, which made a course unsearchable by its own number - is
+ * dropped and rebuilt.
+ */
+export const ensureCourseTextIndex = async (db, log = console.log) => {
+  const courses = db.collection("courses");
+  const existing = (await courses.indexes()).find((index) => index.key?._fts === "text");
+  if (existing) {
+    const current = Object.keys(existing.weights ?? {}).sort();
+    const wanted = [...COURSE_TEXT_INDEX_FIELDS].sort();
+    if (current.length === wanted.length && current.every((field, i) => field === wanted[i])) return;
+    log(`rebuilding courses text index "${existing.name}" to cover ${COURSE_TEXT_INDEX_FIELDS.join(", ")}`);
+    await courses.dropIndex(existing.name);
+  }
+  await courses.createIndex(Object.fromEntries(COURSE_TEXT_INDEX_FIELDS.map((field) => [field, "text"])), {
+    name: "text",
+  });
+};

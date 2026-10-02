@@ -2,6 +2,7 @@ import axios, { isAxiosError } from "axios";
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { normalizeRatingTarget } from "@cmucourses/profile";
 import { STALE_TIME } from "~/app/constants";
 import { showToast } from "~/components/Toast";
 
@@ -41,8 +42,10 @@ const RATINGS_KEY = "ratings";
 const OWN_RATING_KEY = "ownRating";
 
 /** Other students' ratings for a course/instructor. Public: no sign-in required to read. */
-export const useFetchRatings = (targetType: RatingTargetType, targetID: string) => {
+export const useFetchRatings = (targetType: RatingTargetType, rawTargetID: string) => {
   const { getToken } = useAuth();
+  // Same key the backend stores under, so "Steier, David" and "STEIER, DAVID" share one cache entry.
+  const targetID = normalizeRatingTarget(targetType, rawTargetID);
 
   return useQuery({
     queryKey: [RATINGS_KEY, targetType, targetID],
@@ -60,8 +63,9 @@ export const useFetchRatings = (targetType: RatingTargetType, targetID: string) 
 };
 
 /** The signed-in user's own rating for a target, null if they haven't rated it. */
-export const useFetchOwnRating = (targetType: RatingTargetType, targetID: string) => {
+export const useFetchOwnRating = (targetType: RatingTargetType, rawTargetID: string) => {
   const { isSignedIn, userId, getToken } = useAuth();
+  const targetID = normalizeRatingTarget(targetType, rawTargetID);
 
   return useQuery({
     queryKey: [OWN_RATING_KEY, targetType, targetID, userId],
@@ -101,6 +105,31 @@ export const useSubmitRating = () => {
           ? ((error.response.data as { error?: string })?.error ?? "You can't rate this yet.")
           : "Couldn't save your rating. Please try again.";
       showToast({ message, icon: ExclamationTriangleIcon });
+    },
+  });
+};
+
+/** Deletes the signed-in user's own rating for a target. */
+export const useDeleteRating = () => {
+  const { userId, getToken } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ targetType, targetID }: { targetType: RatingTargetType; targetID: string }) => {
+      const token = await getToken();
+      if (!token) throw new Error("Not signed in");
+      const normalized = normalizeRatingTarget(targetType, targetID);
+      await axios.delete(`${backendUrl()}/user/rating`, {
+        data: { token, targetType, targetID: normalized },
+      });
+      return { targetType, targetID: normalized };
+    },
+    onSuccess: ({ targetType, targetID }) => {
+      queryClient.setQueryData([OWN_RATING_KEY, targetType, targetID, userId], null);
+      void queryClient.invalidateQueries({ queryKey: [RATINGS_KEY, targetType, targetID] });
+    },
+    onError: () => {
+      showToast({ message: "Couldn't delete your rating. Please try again.", icon: ExclamationTriangleIcon });
     },
   });
 };

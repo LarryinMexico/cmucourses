@@ -1,7 +1,7 @@
 import React from "react";
 import { PlusIcon, StarIcon, PlusCircleIcon } from "@heroicons/react/24/solid";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
-import { userSlice } from "~/app/user";
+import { useSavedCourses } from "~/app/savedCourses";
 import { CheckIcon } from "@heroicons/react/20/solid";
 import { UserSchedule, userSchedulesSlice } from "~/app/userSchedules";
 import { GetTooltip } from "~/components/GetTooltip";
@@ -13,12 +13,11 @@ interface Props {
 
 const BookmarkButton = ({ courseID }: Props) => {
   const dispatch = useAppDispatch();
-  const bookmarks = useAppSelector((state) => state.user.bookmarked);
-  const bookmarked = bookmarks.indexOf(courseID) !== -1;
+  const { isSaved, toggle } = useSavedCourses();
+  const bookmarked = isSaved(courseID);
 
   const bookmarkCourse = () => {
-    if (bookmarked) dispatch(userSlice.actions.removeBookmark(courseID));
-    else dispatch(userSlice.actions.addBookmark(courseID));
+    toggle(courseID);
   };
 
   const saved = useAppSelector((state) => state.schedules.saved);

@@ -11,7 +11,7 @@
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongoClient } from "mongodb";
 import path from "node:path";
-import { loadCatalog } from "../catalog/load.mjs";
+import { ensureCourseTextIndex, loadCatalog } from "../catalog/load.mjs";
 
 const CACHE = process.env.CATALOG_CACHE;
 const PORT = Number(process.env.MONGO_PORT || 27018);
@@ -38,10 +38,7 @@ for (let i = 0; i < schedules.length; i += 2000) {
 }
 
 // Mirror the indexes schema.prisma declares, so queries behave like production.
-await db.collection("courses").createIndex(
-  { name: "text", department: "text", desc: "text", prereqString: "text" },
-  { name: "text" }
-);
+await ensureCourseTextIndex(db);
 await db.collection("courses").createIndex({ courseID: 1 }, { unique: true });
 await db.collection("schedules").createIndex({ courseID: 1 }, { name: "courseID_1" });
 

@@ -1,22 +1,20 @@
 import React from "react";
-import { LIMITS, Profile, SKILLS } from "@cmucourses/profile";
+import { LIMITS, SKILLS } from "@cmucourses/profile";
 import { Field, TaxonomyMultiSelect } from "./fields";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import { ProfileSection } from "./ProfileSection";
+import { useDraftFields } from "./ProfileDraftContext";
 
-export const SkillsSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft({
-    skillsHave: profile.skillsHave,
-    skillsWant: profile.skillsWant,
-  });
+export const SkillsSection = () => {
+  const { draft, setDraft } = useDraftFields([
+    "skillsHave",
+    "skillsWant",
+  ] as const);
 
   return (
     <ProfileSection
       id="skills"
       title="Skills"
-      profile={profile}
       shareable="skills"
-      dirty={dirty}
-      patch={draft}
     >
       <Field label="Skills you have">
         <TaxonomyMultiSelect

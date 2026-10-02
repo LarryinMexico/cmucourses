@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from "bun:test";
-import { MAX_BUSY_BLOCKS, parseBusyBlocks, parseSessions } from "./courseQuery";
+import { courseIDsInKeywords, MAX_BUSY_BLOCKS, parseBusyBlocks, parseSessions } from "./courseQuery";
 
 const session = (value: object) => JSON.stringify(value);
 
@@ -78,5 +78,17 @@ describe("parseBusyBlocks", () => {
   test(`keeps at most ${MAX_BUSY_BLOCKS}`, () => {
     const many = Array.from({ length: MAX_BUSY_BLOCKS + 20 }, (_, i) => `1,${i},${i + 1}`);
     expect(parseBusyBlocks(many)).toHaveLength(MAX_BUSY_BLOCKS);
+  });
+});
+
+describe("courseIDsInKeywords", () => {
+  test("finds course numbers with or without the hyphen, standardized and deduplicated", () => {
+    expect(courseIDsInKeywords("36-613")).toEqual(["36-613"]);
+    expect(courseIDsInKeywords("36613 and 15-122, 36-613")).toEqual(["36-613", "15-122"]);
+  });
+
+  test("ignores plain words and longer numbers", () => {
+    expect(courseIDsInKeywords("machine learning")).toEqual([]);
+    expect(courseIDsInKeywords("1234567")).toEqual([]);
   });
 });

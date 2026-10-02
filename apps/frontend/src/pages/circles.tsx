@@ -3,13 +3,18 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import type { ParsedUrlQuery } from "querystring";
 import { SignInButton, useAuth } from "@clerk/nextjs";
-import { EyeSlashIcon } from "@heroicons/react/24/outline";
+import { ArrowUpIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import type { CirclePost, SocialDirectoryProfile } from "@cmucourses/profile";
 import { Page } from "~/components/Page";
 import { Card } from "~/components/Card";
 import Link from "~/components/Link";
 import { useFetchProfile } from "~/app/api/profile";
-import { useFeed, useSocialDirectory, type FeedFilter } from "~/app/api/social";
+import {
+  useFeed,
+  useFeedHead,
+  useSocialDirectory,
+  type FeedFilter,
+} from "~/app/api/social";
 import { useConversations } from "~/app/api/messages";
 import { unreadTotal } from "~/app/circles";
 import { classNames } from "~/app/utils";
@@ -65,6 +70,8 @@ const Feed = ({
   onMessage: (post: CirclePost) => void;
 }) => {
   const feed = useFeed(filter);
+  const { data: head } = useFeedHead(filter);
+  const top = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const posts = feed.data?.pages.flatMap((page) => page.posts) ?? [];
   const {
@@ -73,6 +80,17 @@ const Feed = ({
     isFetchNextPageError,
     fetchNextPage,
   } = feed;
+  // The polled newest post differs from the top of what is shown: offer to load it.
+  const hasNew =
+    !!head &&
+    !feed.isPending &&
+    !feed.isFetching &&
+    (posts[0]?.postID !== head.postID ||
+      posts[0]?.updatedAt !== head.updatedAt);
+  const showNew = () => {
+    void feed.refetch();
+    top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // The page scrolls inside Page's content column, not the window, so observe against the viewport.
   useEffect(() => {
@@ -92,7 +110,7 @@ const Feed = ({
   }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
   return (
-    <div className="space-y-4">
+    <div ref={top} className="scroll-mt-6 space-y-4">
       <div className="flex gap-2">
         {FEED_FILTERS.map((f) => (
           <button
@@ -111,6 +129,16 @@ const Feed = ({
           </button>
         ))}
       </div>
+      {hasNew && (
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-1 rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-blue-800 text-sm hover:bg-blue-100"
+          onClick={showNew}
+        >
+          <ArrowUpIcon className="h-4 w-4" />
+          New posts
+        </button>
+      )}
       {feed.isError && posts.length === 0 ? (
         <ErrorLine what="the feed" retry={() => void feed.refetch()} />
       ) : feed.isPending ? (

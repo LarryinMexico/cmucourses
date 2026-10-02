@@ -123,6 +123,12 @@ a {
   --color-teal-950: oklch(98.4% 0.014 180.72);
 }
 
+/* Native time/date picker icons are drawn black and nightwind can't flip them; invert them in dark mode. */
+.dark input[type="time"]::-webkit-calendar-picker-indicator,
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
 /* Elements marked nightwind-prevent(-block) keep their light colors. */
 .dark .nightwind-prevent,
 .dark .nightwind-prevent-block {

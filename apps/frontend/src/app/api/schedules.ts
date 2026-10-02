@@ -15,7 +15,7 @@ const fetchSchedulesByInstructorBatcher = create({
       params.append("instructor", instructor)
     );
 
-    const response = await axios.get(url, {
+    const response = await axios.get<Schedule[]>(url, {
       headers: {
         "Content-Type": "application/json",
       },
@@ -24,8 +24,11 @@ const fetchSchedulesByInstructorBatcher = create({
 
     return instructors.map((instructor) => ({
       instructor,
-      schedules: response.data.filter((schedule: Schedule) =>
-        schedule.instructors?.some((i) => i === instructor)
+      schedules: response.data.filter((schedule) =>
+        // Case-insensitive, like the backend: links upper-case names the catalog stores mixed-case.
+        schedule.instructors?.some(
+          (i) => i.toUpperCase() === instructor.toUpperCase()
+        )
       ),
     }));
   },

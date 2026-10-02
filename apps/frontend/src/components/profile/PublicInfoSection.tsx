@@ -1,24 +1,19 @@
 import React from "react";
-import { LIMITS, Profile } from "@cmucourses/profile";
+import { LIMITS } from "@cmucourses/profile";
 import { classNames } from "~/app/utils";
 import { Field, INPUT_CLASS } from "./fields";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import { ProfileSection } from "./ProfileSection";
+import { useDraftFields } from "./ProfileDraftContext";
 
-export const PublicInfoSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft({
-    displayName: profile.displayName ?? "",
-    bio: profile.bio ?? "",
-  });
+export const PublicInfoSection = () => {
+  const { draft, setDraft } = useDraftFields(["displayName", "bio"] as const);
 
   return (
     <ProfileSection
       id="public-info"
       title="Public info"
       description="How you appear in Scotty Circles. Individual profile sections still follow their Public/Private controls."
-      profile={profile}
       headerBadge="public"
-      dirty={dirty}
-      patch={draft}
     >
       <Field label="Display name">
         <input

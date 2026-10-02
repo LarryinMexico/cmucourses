@@ -9,10 +9,10 @@ import {
   CAREERS,
   LIMITS,
   labelOf,
-  Profile,
 } from "@cmucourses/profile";
 import { Select } from "./fields";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import { ProfileSection } from "./ProfileSection";
+import { useDraftField } from "./ProfileDraftContext";
 
 const IconButton = ({
   label,
@@ -117,18 +117,15 @@ export const CareerGoalsEditor = ({
   );
 };
 
-export const CareersSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft(profile.careers);
+export const CareersSection = () => {
+  const { draft, setDraft } = useDraftField("careers");
 
   return (
     <ProfileSection
       id="careers"
       title="Career goals"
       description="Pick up to three, in order of priority."
-      profile={profile}
       shareable="careers"
-      dirty={dirty}
-      patch={{ careers: draft }}
     >
       <CareerGoalsEditor value={draft} onChange={setDraft} />
     </ProfileSection>

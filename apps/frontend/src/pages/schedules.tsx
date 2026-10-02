@@ -1,4 +1,6 @@
 import { NextPage } from "next";
+import React, { useState } from "react";
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/outline";
 import Aggregate from "~/components/Aggregate";
 import Topbar from "~/components/Topbar";
 import { useAppSelector } from "~/app/hooks";
@@ -15,6 +17,31 @@ import SectionSelector from "~/components/SectionSelector";
 import SavedSchedulesCard from "~/components/schedules/SavedSchedulesCard";
 import GeneratePanel from "~/components/schedules/GeneratePanel";
 import { CAL_VIEW, SCHED_VIEW } from "~/app/constants";
+
+/** FCE aggregation and card display settings: rarely changed, so folded away by default. */
+const DisplayOptions = () => {
+  const [open, setOpen] = useState(false);
+  const Icon = open ? ChevronUpIcon : ChevronDownIcon;
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        aria-expanded={open}
+        className="flex w-full items-center justify-between text-gray-700 text-lg"
+        onClick={() => setOpen(!open)}
+      >
+        Display options
+        <Icon className="h-5 w-5" />
+      </button>
+      {open && (
+        <div className="mt-2 space-y-4">
+          <Aggregate />
+          <ShowFilter />
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SchedulePage: NextPage = () => {
   const scheduled = useAppSelector(selectCoursesInActiveSchedule);
@@ -53,12 +80,12 @@ const SchedulePage: NextPage = () => {
       }
       sidebar={
         <>
+          {/* Pick a semester and sections, then generate, then keep: in the order they're used. */}
           <ScheduleSelector />
-          <SavedSchedulesCard />
-          <Aggregate />
-          <ShowFilter />
+          <DisplayOptions />
           <SectionSelector courseIDs={scheduled} />
           <GeneratePanel />
+          <SavedSchedulesCard />
         </>
       }
     />

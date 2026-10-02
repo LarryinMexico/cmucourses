@@ -44,3 +44,6 @@ export function parsePrereqString(prereqString: string): string[][] {
   const andGroups = normalized.split("and"); // Split by AND groups
   return andGroups.map((group) => group.split("or")); // Split each AND group into OR relationships
 }
+
+/** Escapes a string for use inside a regular expression, e.g. an exact case-insensitive match. */
+export const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { profilePatchSchema, ratingPatchSchema, standardizeCourseID, savedFiltersSchema, emptyProfile } from "./schema";
+import {
+  profilePatchSchema,
+  ratingPatchSchema,
+  standardizeCourseID,
+  savedFiltersSchema,
+  emptyProfile,
+  normalizeRatingTarget,
+} from "./schema";
 import { CAREERS } from "./taxonomy/careers";
 import { SKILLS } from "./taxonomy/skills";
 import { COLLEGES, MAJORS, majorsForCollege, MINORS } from "./taxonomy/colleges";
@@ -373,5 +380,32 @@ describe("busy-time labels visibility", () => {
       "PUBLIC"
     );
     expect(emptyProfile().visibility.busyLabels).toBe("PRIVATE");
+  });
+});
+
+describe("savedCourses", () => {
+  test("standardizes course IDs", () => {
+    const parsed = profilePatchSchema.parse({ savedCourses: ["15122", "36-613"] });
+    expect(parsed.savedCourses).toEqual(["15-122", "36-613"]);
+  });
+
+  test("rejects duplicates and bad IDs", () => {
+    expect(profilePatchSchema.safeParse({ savedCourses: ["15122", "15-122"] }).success).toBe(false);
+    expect(profilePatchSchema.safeParse({ savedCourses: ["hello"] }).success).toBe(false);
+  });
+
+  test("an empty profile has none", () => {
+    expect(emptyProfile().savedCourses).toEqual([]);
+  });
+});
+
+describe("normalizeRatingTarget", () => {
+  test("standardizes a course ID", () => {
+    expect(normalizeRatingTarget("COURSE", "95891")).toBe("95-891");
+  });
+
+  test("upper-cases an instructor so differently cased names share one key", () => {
+    expect(normalizeRatingTarget("INSTRUCTOR", " Steier, David ")).toBe("STEIER, DAVID");
+    expect(normalizeRatingTarget("INSTRUCTOR", "STEIER, DAVID")).toBe("STEIER, DAVID");
   });
 });

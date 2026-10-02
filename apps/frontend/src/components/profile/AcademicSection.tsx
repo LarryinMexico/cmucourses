@@ -5,17 +5,16 @@ import {
   LIMITS,
   majorsForCollege,
   MINORS,
-  Profile,
 } from "@cmucourses/profile";
 import { Field, Select, SelectOption, TaxonomyMultiSelect } from "./fields";
 import {
   DEGREE_OPTIONS,
-  EMPTY_ACADEMIC,
   GRAD_YEAR_OPTIONS,
   NONE_OPTION,
   SEMESTER_OPTIONS,
 } from "./options";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import { ProfileSection } from "./ProfileSection";
+import { useDraftField } from "./ProfileDraftContext";
 
 const COLLEGE_OPTIONS: SelectOption<string | null>[] = [
   NONE_OPTION,
@@ -108,19 +107,14 @@ export const AcademicFields = ({
   );
 };
 
-export const AcademicSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft(
-    profile.academic ?? EMPTY_ACADEMIC
-  );
+export const AcademicSection = () => {
+  const { draft, setDraft } = useDraftField("academic");
 
   return (
     <ProfileSection
       id="academic"
       title="Academic background"
-      profile={profile}
       shareable="academic"
-      dirty={dirty}
-      patch={{ academic: draft }}
     >
       <AcademicFields value={draft} onChange={setDraft} />
     </ProfileSection>

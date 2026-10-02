@@ -83,18 +83,31 @@ const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 export const Pill = ({
   label,
   onRemove,
+  tone = "blue",
 }: {
   label: string;
   onRemove?: () => void;
+  /** Red marks something ruled out (e.g. an excluded section in Generate). */
+  tone?: "blue" | "red";
 }) => (
-  <span className="flex items-center gap-1 rounded px-2 py-0.5 text-blue-800 bg-blue-50">
+  <span
+    className={
+      tone === "red"
+        ? "flex items-center gap-1 rounded px-2 py-0.5 text-red-800 bg-red-50"
+        : "flex items-center gap-1 rounded px-2 py-0.5 text-blue-800 bg-blue-50"
+    }
+  >
     <span>{label}</span>
     {onRemove && (
       <button
         type="button"
         aria-label={`Remove ${label}`}
         title="Remove"
-        className="-mr-1 rounded p-0.5 hover:bg-blue-100"
+        className={
+          tone === "red"
+            ? "-mr-1 rounded p-0.5 hover:bg-red-100"
+            : "-mr-1 rounded p-0.5 hover:bg-blue-100"
+        }
         onPointerDown={stop}
         onMouseDown={stop}
         onKeyDown={stop}

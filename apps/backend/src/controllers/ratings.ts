@@ -1,16 +1,16 @@
 import { RequestHandler } from "express";
 import db, { RatingTargetType } from "@cmucourses/db";
-import { ratingPatchSchema, RatingPatchInput } from "@cmucourses/profile";
-import { ElemType, exclude, PrismaReturn, standardizeID } from "~/util";
+import { normalizeRatingTarget, ratingPatchSchema, RatingPatchInput } from "@cmucourses/profile";
+import { ElemType, exclude, PrismaReturn } from "~/util";
 import { UserLocals } from "~/controllers/user";
 
 type RatingDoc = ElemType<PrismaReturn<typeof db.ratings.findMany>>;
 
 const VALID_TARGET_TYPES: readonly string[] = ["COURSE", "INSTRUCTOR"];
 
-/** courseID gets standardized ("15122" -> "15-122"); an instructor name is used as-is. */
+/** courseID gets standardized ("15122" -> "15-122"); an instructor name is upper-cased (see normalizeRatingTarget). */
 const resolveTargetID = (targetType: string, targetID: string): string =>
-  targetType === "COURSE" ? standardizeID(targetID) : targetID;
+  normalizeRatingTarget(targetType as RatingTargetType, targetID);
 
 // ---- POST /ratings — other students' ratings for a course/instructor. ----
 
@@ -116,7 +116,8 @@ export const submitRating: RequestHandler<
     return;
   }
 
-  const { targetType, targetID, stars, comment, wishIKnew, gradingFairness, transparency } = parsed.data;
+  const { targetType, stars, comment, wishIKnew, gradingFairness, transparency } = parsed.data;
+  const targetID = normalizeRatingTarget(targetType, parsed.data.targetID);
   // Workload asks about a course, so an instructor rating never keeps it.
   const workload = targetType === "COURSE" ? (parsed.data.workload ?? null) : null;
 
@@ -131,9 +132,15 @@ export const submitRating: RequestHandler<
       }
     } else {
       const takenIDs = (profile?.courses ?? []).filter((c) => c.status === "TAKEN").map((c) => c.courseID);
-      const taughtByInstructor =
-        takenIDs.length > 0 &&
-        (await db.schedules.findFirst({ where: { courseID: { in: takenIDs }, instructors: { has: targetID } } }));
+      // Instructor names differ in case across the catalog, so compare them upper-cased here
+      // rather than with Prisma's case-sensitive `has`. Taken courses are few.
+      const taught =
+        takenIDs.length > 0
+          ? await db.schedules.findMany({ where: { courseID: { in: takenIDs } }, select: { instructors: true } })
+          : [];
+      const taughtByInstructor = taught.some((schedule) =>
+        schedule.instructors.some((name) => name.toUpperCase() === targetID)
+      );
       if (!taughtByInstructor) {
         res.status(403).json({
           error: "You can only rate an instructor who taught a course marked Taken in your profile.",
@@ -165,6 +172,42 @@ export const submitRating: RequestHandler<
       },
     });
     res.json(exclude(doc, "id"));
+  } catch (e) {
+    next(e);
+  }
+};
+
+// ---- DELETE /user/rating — remove the caller's own rating for a target. ----
+
+export interface DeleteRating {
+  params: unknown;
+  resBody: { deleted: number } | { error: string };
+  reqBody: { token: string; targetType: string; targetID: string };
+  query: unknown;
+}
+
+export const deleteRating: RequestHandler<
+  DeleteRating["params"],
+  DeleteRating["resBody"],
+  DeleteRating["reqBody"],
+  DeleteRating["query"],
+  UserLocals
+> = async (req, res, next) => {
+  const { targetType, targetID } = req.body;
+  if (!VALID_TARGET_TYPES.includes(targetType) || typeof targetID !== "string") {
+    res.status(400).json({ error: `Unknown targetType "${targetType}"` });
+    return;
+  }
+
+  try {
+    const { count } = await db.ratings.deleteMany({
+      where: {
+        clerkUserId: res.locals.userId,
+        targetType: targetType as RatingTargetType,
+        targetID: resolveTargetID(targetType, targetID),
+      },
+    });
+    res.json({ deleted: count });
   } catch (e) {
     next(e);
   }

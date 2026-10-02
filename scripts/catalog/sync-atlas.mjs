@@ -22,7 +22,7 @@
  * default). Re-run this after a new semester's schedules are published upstream.
  */
 import { MongoClient } from "mongodb";
-import { loadCatalog } from "./load.mjs";
+import { ensureCourseTextIndex, loadCatalog } from "./load.mjs";
 import { downloadCatalog } from "./download.mjs";
 
 const CACHE = process.env.CATALOG_CACHE || `${process.env.HOME}/.cache/cmucourses-local-catalog`;
@@ -146,11 +146,7 @@ const ensureIndex = async (collection, spec, options) => {
   }
 };
 
-await ensureIndex(
-  "courses",
-  { name: "text", department: "text", desc: "text", prereqString: "text" },
-  { name: "text" }
-);
+await ensureCourseTextIndex(db, log);
 await ensureIndex("courses", { courseID: 1 }, { unique: true });
 await ensureIndex("schedules", { courseID: 1 }, { name: "courseID_1" });
 

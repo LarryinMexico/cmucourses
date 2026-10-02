@@ -2,19 +2,21 @@ import React, { useState } from "react";
 import {
   LIMITS,
   PlannedCourse,
-  Profile,
   ProfileSemester,
 } from "@cmucourses/profile";
 import { CoursePicker } from "./CoursePicker";
-import { ProfileSection, useDraft } from "./ProfileSection";
+import { ProfileSection } from "./ProfileSection";
+import { useDraftField, useProfileDraft } from "./ProfileDraftContext";
 import { SECONDARY_BUTTON_CLASS, Select } from "./fields";
 import { PLAN_YEAR_OPTIONS, SEMESTER_OPTIONS } from "./options";
 import { PlanSemesters, sameEntry } from "./PlanSemesters";
 
 const currentYear = String(new Date().getFullYear());
 
-export const PlanSection = ({ profile }: { profile: Profile }) => {
-  const { draft, setDraft, dirty } = useDraft(profile.plannedCourses);
+export const PlanSection = () => {
+  const { draft, setDraft } = useDraftField("plannedCourses");
+  // The unit check follows the Course load card as edited, saved or not.
+  const { workload } = useProfileDraft().draft;
   const [adding, setAdding] = useState<{
     courseID: string | null;
     semester: ProfileSemester;
@@ -37,23 +39,20 @@ export const PlanSection = ({ profile }: { profile: Profile }) => {
       id="plan"
       title="Future course plan"
       description="Place courses into future semesters. The planner uses this alongside requirements and career goals."
-      profile={profile}
-      dirty={dirty}
-      patch={{ plannedCourses: draft }}
     >
       {draft.length === 0 && (
         <div className="text-gray-400 text-sm">No planned courses yet.</div>
       )}
       <PlanSemesters
         planned={draft}
-        workload={profile.workload}
+        workload={workload}
         onRemove={(course) =>
           setDraft(draft.filter((item) => !sameEntry(item, course)))
         }
       />
       {draft.length > 0 &&
-        profile.workload?.unitsMin == null &&
-        profile.workload?.unitsMax == null && (
+        workload.unitsMin == null &&
+        workload.unitsMax == null && (
           <div className="text-gray-400 text-xs">
             Set a units range under Course load to check each semester against
             it.

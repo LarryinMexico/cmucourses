@@ -86,6 +86,22 @@ export const useFeed = (filter: FeedFilter) => {
   });
 };
 
+/**
+ * The newest post for a filter, polled every 30s so the feed can offer "New posts" rather than
+ * reshuffling under the reader. Its key starts with the feed's, so social actions refresh it too.
+ */
+export const useFeedHead = (filter: FeedFilter) => {
+  const { isSignedIn, userId, getToken } = useAuth();
+  return useQuery({
+    queryKey: [FEED_KEY, userId, filter, "head"],
+    queryFn: () => post<FeedPage>(getToken, "/social/feed", { filter }),
+    select: (page) => page.posts[0] ?? null,
+    enabled: !!isSignedIn,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
+};
+
 /** Refreshes everything a social action can change: the feed pages and the directory. */
 const useRefreshSocial = () => {
   const { userId } = useAuth();

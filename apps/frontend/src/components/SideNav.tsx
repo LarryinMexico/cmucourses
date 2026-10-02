@@ -20,12 +20,15 @@ const SideNavItem = ({
   link,
   newTab = false,
   active = false,
+  isNew = false,
 }: {
   icon: React.ComponentType<{ className: string }>;
   text: string;
   link: string;
   newTab?: boolean;
   active?: boolean;
+  /** Pages this fork added or substantially extended; they hover red so a demo can point them out. */
+  isNew?: boolean;
 }) => {
   const Icon = icon;
 
@@ -33,15 +36,23 @@ const SideNavItem = ({
     <div className="group flex cursor-pointer flex-col items-center lg:flex-row">
       <div className="flex">
         <Icon
-          className={`h-7 w-7 group-hover:stroke-blue-500 lg:h-6 lg:w-6 ${
-            active ? "stroke-blue-600 " : "stroke-gray-500 "
+          className={`h-7 w-7 lg:h-6 lg:w-6 ${
+            isNew ? "group-hover:stroke-red-500" : "group-hover:stroke-blue-500"
+          } ${
+            !active
+              ? "stroke-gray-500"
+              : isNew
+                ? "stroke-red-600"
+                : "stroke-blue-600"
           }`}
         />
       </div>
       <div
         className={`${
-          active ? "text-blue-600" : "text-gray-500"
-        } text-xs group-hover:text-blue-500 lg:ml-2 lg:text-lg`}
+          !active ? "text-gray-500" : isNew ? "text-red-600" : "text-blue-600"
+        } ${
+          isNew ? "group-hover:text-red-500" : "group-hover:text-blue-500"
+        } text-xs lg:ml-2 lg:text-lg`}
       >
         {text}
       </div>
@@ -77,6 +88,7 @@ export const SideNav = ({ activePage }: { activePage?: string }) => {
         text="Schedules"
         link="/schedules"
         active={activePage === "schedules"}
+        isNew
       />
       <SideNavItem
         icon={UserCircleIcon}
@@ -101,18 +113,21 @@ export const SideNav = ({ activePage }: { activePage?: string }) => {
         text="Careers"
         link="/careers"
         active={activePage === "careers"}
+        isNew
       />
       <SideNavItem
         icon={AcademicCapIcon}
         text="Requirements"
         link="/requirements"
         active={activePage === "requirements"}
+        isNew
       />
       <SideNavItem
         icon={UserGroupIcon}
         text="Circles"
         link="/circles"
         active={activePage === "circles"}
+        isNew
       />
       <SideNavItem
         icon={ChatBubbleBottomCenterTextIcon}
@@ -126,6 +141,7 @@ export const SideNav = ({ activePage }: { activePage?: string }) => {
         text="Profile"
         link="/profile"
         active={activePage === "profile"}
+        isNew
       />
     </div>
   );

@@ -3,11 +3,11 @@ import React from "react";
 import CourseList from "~/components/CourseList";
 import Aggregate from "~/components/Aggregate";
 import ShowFilter from "~/components/ShowFilter";
-import { useAppSelector } from "~/app/hooks";
+import { useSavedCourses } from "~/app/savedCourses";
 import { Page } from "~/components/Page";
 
 const SavedPage: NextPage = () => {
-  const saved = useAppSelector((state) => state.user.bookmarked);
+  const { saved } = useSavedCourses();
 
   return (
     <Page

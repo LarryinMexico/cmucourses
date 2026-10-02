@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generateSchedules, type CandidateCourse, type GeneratorInput } from "./scheduleGenerator";
+import { generateSchedules, SCORE_WEIGHTS, type CandidateCourse, type GeneratorInput } from "./scheduleGenerator";
 import { DEFAULT_SCHEDULE_PREFERENCES, type BusyBlock } from "./schema";
 
 const block = (day: number, begin: number, end: number): BusyBlock => ({ day, begin, end, label: null });
@@ -540,5 +540,12 @@ describe("candidate pool (optionalCourses)", () => {
     console.log(`pool of 12 + 4 required: ${elapsed.toFixed(0)} ms`);
     expect(result.length).toBeGreaterThan(0);
     expect(elapsed).toBeLessThan(1000);
+  });
+});
+
+describe("SCORE_WEIGHTS", () => {
+  test("sum to 1, so totalScore stays on the same 0-100 scale as each part", () => {
+    const sum = Object.values(SCORE_WEIGHTS).reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(1, 10);
   });
 });

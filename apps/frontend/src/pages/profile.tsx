@@ -1,5 +1,6 @@
 import type { NextPage } from "next";
 import React from "react";
+import { useRouter } from "next/router";
 import { SignInButton, useAuth } from "@clerk/nextjs";
 import { Profile } from "@cmucourses/profile";
 import { Page } from "~/components/Page";
@@ -15,6 +16,10 @@ import { CoursesSection } from "~/components/profile/CoursesSection";
 import { PlanSection } from "~/components/profile/PlanSection";
 import { PROFILE_SECTIONS } from "~/components/profile/completeness";
 import { PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
+import {
+  ProfileDraftProvider,
+  ProfileSaveBar,
+} from "~/components/profile/ProfileDraftContext";
 
 const Completeness = ({ profile }: { profile: Profile }) => {
   const missing = PROFILE_SECTIONS.filter(
@@ -43,6 +48,26 @@ const Completeness = ({ profile }: { profile: Profile }) => {
         </>
       )}
     </div>
+  );
+};
+
+/** Opens the first-login setup again (OnboardingModal watches `?welcome=1`). */
+const WelcomeAgain = () => {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      className="mt-1 text-blue-600 text-sm hover:underline"
+      onClick={() =>
+        void router.replace(
+          { query: { ...router.query, welcome: "1" } },
+          undefined,
+          { shallow: true }
+        )
+      }
+    >
+      Run the welcome setup again
+    </button>
   );
 };
 
@@ -93,20 +118,24 @@ const ProfileContent = () => {
   if (!profile) return <Loading />;
 
   return (
-    <div className="m-auto max-w-4xl space-y-4 p-6">
-      <div>
-        <h1 className="text-gray-700 text-lg">Your Profile</h1>
-        <Completeness profile={profile} />
+    <ProfileDraftProvider profile={profile}>
+      <ProfileSaveBar />
+      <div className="m-auto max-w-4xl space-y-4 p-6">
+        <div>
+          <h1 className="text-gray-700 text-lg">Your Profile</h1>
+          <Completeness profile={profile} />
+          <WelcomeAgain />
+        </div>
+        <PublicInfoSection />
+        <AcademicSection />
+        <CareersSection />
+        <SkillsSection />
+        <WorkloadSection />
+        <TimeSection />
+        <CoursesSection />
+        <PlanSection />
       </div>
-      <PublicInfoSection profile={profile} />
-      <AcademicSection profile={profile} />
-      <CareersSection profile={profile} />
-      <SkillsSection profile={profile} />
-      <WorkloadSection profile={profile} />
-      <TimeSection profile={profile} />
-      <CoursesSection profile={profile} />
-      <PlanSection profile={profile} />
-    </div>
+    </ProfileDraftProvider>
   );
 };
 

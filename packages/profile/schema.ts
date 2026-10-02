@@ -24,6 +24,7 @@ export const LIMITS = {
   busyBlockLabel: 40,
   courses: 200,
   plannedCourses: 100,
+  savedCourses: 100,
   units: 60,
   hoursPerWeek: 100,
 } as const;
@@ -263,6 +264,18 @@ export const profilePatchSchema = z
       ]),
     visibility: visibilitySchema,
     savedFilters: savedFiltersSchema.nullable(),
+    /** Starred courses (Saved). Private: never in social output. */
+    savedCourses: uniqueList(
+      z
+        .string()
+        .transform(standardizeCourseID)
+        .refine(
+          (id) => COURSE_ID_REGEX.test(id),
+          (id) => ({ message: `Invalid course ID "${id}"` })
+        ),
+      LIMITS.savedCourses,
+      "saved courses"
+    ),
     completeOnboarding: z.literal(true),
   })
   .partial()
@@ -298,6 +311,8 @@ export interface Profile {
   visibility: ProfileVisibility;
   /** The search filters kept as this student's default, if any. Never shown to other students. */
   savedFilters: SavedFilters | null;
+  /** Starred courses (Saved). Never shown to other students. */
+  savedCourses: string[];
   onboardedAt: string | null;
   updatedAt: string | null;
 }
@@ -333,12 +348,21 @@ export const emptyProfile = (): Profile => ({
   plannedCourses: [],
   visibility: { ...DEFAULT_VISIBILITY },
   savedFilters: null,
+  savedCourses: [],
   onboardedAt: null,
   updatedAt: null,
 });
 
 export const RATING_TARGET_TYPES = ["COURSE", "INSTRUCTOR"] as const;
 export type RatingTargetType = (typeof RATING_TARGET_TYPES)[number];
+
+/**
+ * The key a rating is stored under: a course ID standardized ("15122" -> "15-122"), an instructor
+ * name trimmed and upper-cased, because the catalog spells the same name in different cases
+ * ("Steier, David" in schedules, "STEIER, DAVID" in links and FCEs).
+ */
+export const normalizeRatingTarget = (targetType: RatingTargetType, targetID: string): string =>
+  targetType === "COURSE" ? standardizeCourseID(targetID) : targetID.trim().toUpperCase();
 
 export const RATING_LIMITS = { comment: 1000, wishIKnew: 1000 } as const;
 

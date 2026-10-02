@@ -261,3 +261,12 @@ export const fitAvailabilityStage = (busy: BusyBlockFilter[], sessions: SessionF
     },
   } as Prisma.InputJsonValue;
 };
+
+/**
+ * Course numbers typed into the search box ("36-613", "36613"), standardized. The text index
+ * splits "36-613" into "36" and "613", which also match hundreds of other courses, so the search
+ * ranks these exact matches first.
+ */
+export const courseIDsInKeywords = (keywords: string): string[] => [
+  ...new Set([...keywords.matchAll(/(?<!\d)(\d{2})-?(\d{3})(?!\d)/g)].map(([, dept, num]) => `${dept}-${num}`)),
+];

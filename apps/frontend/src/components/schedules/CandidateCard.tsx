@@ -11,6 +11,7 @@ import { Card } from "~/components/Card";
 import { PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
 import { ScheduleCandidate, SectionRef } from "~/app/scheduleGenerator";
 import { classNames } from "~/app/utils";
+import { SCORE_WEIGHTS } from "@cmucourses/profile";
 
 const COLLAPSED_REASONS = 4;
 
@@ -28,6 +29,17 @@ export const sameRef = (a: SectionRef, b: SectionRef) =>
   a.section === b.section;
 
 const ICON_BUTTON_CLASS = "rounded p-1 hover:bg-gray-50";
+
+/** A weight as a whole percentage, e.g. 0.35 -> "35%". */
+const pct = (weight: number) => `${Math.round(weight * 100)}%`;
+
+/** Traffic-light colors for a candidate's total score, the same families the status badges use. */
+const scoreClass = (score: number): string =>
+  score >= 80
+    ? "text-green-800 bg-green-50"
+    : score >= 60
+      ? "text-yellow-800 bg-yellow-50"
+      : "text-red-800 bg-red-50";
 
 const CandidateCard = ({
   candidate,
@@ -62,27 +74,41 @@ const CandidateCard = ({
     <Card>
       <div className="flex items-center justify-between">
         <Card.Header>Option {index + 1}</Card.Header>
-        <span className="text-gray-400 text-xs">
-          {Math.round(candidate.totalScore)} / 100
+        <span
+          className={classNames(
+            "rounded px-2 py-1 text-lg font-semibold",
+            scoreClass(candidate.totalScore)
+          )}
+          title={`Weighted score: availability ${pct(SCORE_WEIGHTS.availability)}, workload ${pct(SCORE_WEIGHTS.workload)}, career/skill fit ${pct(SCORE_WEIGHTS.career)}, saved preferences ${pct(SCORE_WEIGHTS.preference)}`}
+        >
+          {Math.round(candidate.totalScore)}{" "}
+          <span className="text-xs font-normal">/ 100</span>
         </span>
       </div>
       <div className="mt-3 space-y-2">
         <ProgressBar
           value={scores.availability}
           max={100}
-          label={`Availability fit — ${candidate.availability.status.toLowerCase()}`}
+          label={`Availability fit — ${candidate.availability.status.toLowerCase()} · ${pct(SCORE_WEIGHTS.availability)}`}
         />
         <ProgressBar
           value={scores.workload}
           max={100}
-          label={`Workload — ${candidate.totalUnits} units (${candidate.workloadFit.toLowerCase().replace("_", " ")})`}
+          label={`Workload — ${candidate.totalUnits} units (${candidate.workloadFit.toLowerCase().replace("_", " ")}) · ${pct(SCORE_WEIGHTS.workload)}`}
         />
-        <ProgressBar value={scores.career} max={100} label="Career/skill fit" />
+        <ProgressBar
+          value={scores.career}
+          max={100}
+          label={`Career/skill fit · ${pct(SCORE_WEIGHTS.career)}`}
+        />
         <ProgressBar
           value={scores.preference}
           max={100}
-          label="Saved preferences"
+          label={`Saved preferences · ${pct(SCORE_WEIGHTS.preference)}`}
         />
+        <div className="text-gray-400 text-xs">
+          Total = weighted sum of the four bars.
+        </div>
       </div>
       <ul className="mt-3 divide-y divide-gray-100 text-gray-700 text-sm">
         {candidate.picks.map((pick) => {

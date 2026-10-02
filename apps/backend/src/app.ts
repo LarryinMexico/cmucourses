@@ -8,7 +8,7 @@ import { getFCEs } from "~/controllers/fces";
 import { getInstructors } from "~/controllers/instructors";
 import { getGeneds } from "~/controllers/geneds";
 import { getSchedules } from "~/controllers/schedules";
-import { getOwnRating, getRatings, submitRating } from "~/controllers/ratings";
+import { deleteRating, getOwnRating, getRatings, submitRating } from "~/controllers/ratings";
 import { getSocialDirectory, updateFollow } from "~/controllers/social";
 import {
   addPostComment,
@@ -56,6 +56,7 @@ app.route("/ratings").post(isUser, getRatings);
 // The caller's own rating: POST reads it (null if none), PATCH upserts it.
 app.route("/user/rating").post(requireUser, getOwnRating);
 app.route("/user/rating").patch(requireUser, submitRating);
+app.route("/user/rating").delete(requireUser, deleteRating);
 
 app.route("/social/directory").post(requireUser, getSocialDirectory);
 app.route("/user/social/follow").patch(requireUser, updateFollow);

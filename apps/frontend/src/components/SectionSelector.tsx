@@ -249,17 +249,19 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
                       <RadioGroup.Option
                         key={session.name}
                         value={session.name}
-                        className={({ active }) => {
+                        className={({ active, checked }) => {
                           return classNames(
                             "flex relative justify-center cursor-pointer select-none focus:outline-none",
-                            "hover:bg-gray-200 p-1",
+                            "p-1",
+                            checked ? "bg-blue-600" : "hover:bg-gray-200",
                             i === 0 ? "rounded-l-md pl-1" : "",
                             i === sessions.length - 1
                               ? "rounded-r-md pr-1"
                               : "",
-                            active
-                              ? "bg-indigo-600 text-gray-600"
-                              : "text-gray-900"
+                            // Keyboard focus: an outline, so the text stays readable.
+                            active && !checked
+                              ? "ring-2 ring-inset ring-blue-400"
+                              : ""
                           );
                         }}
                         onMouseEnter={() => {
@@ -287,12 +289,16 @@ const SectionSelector = ({ courseIDs }: { courseIDs: string[] }) => {
                         }}
                       >
                         {({ checked }) => (
-                          <span className="block truncate">
+                          <span className="flex items-center gap-1 truncate">
+                            {checked && (
+                              <CheckIcon className="h-4 w-4 shrink-0 text-white" />
+                            )}
                             <span
-                              className={classNames(
-                                "text-gray-700 ",
-                                checked ? "font-semibold" : "font-normal"
-                              )}
+                              className={
+                                checked
+                                  ? "font-semibold text-white"
+                                  : "font-normal text-gray-700"
+                              }
                             >
                               {session.name}
                             </span>

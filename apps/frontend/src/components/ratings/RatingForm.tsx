@@ -2,8 +2,17 @@ import React, { useEffect, useState } from "react";
 import { StarIcon } from "@heroicons/react/24/solid";
 import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
 import { RATING_LIMITS } from "@cmucourses/profile";
-import { PRIMARY_BUTTON_CLASS } from "~/components/profile/fields";
-import { Rating, RatingTargetType, useSubmitRating } from "~/app/api/ratings";
+import {
+  PRIMARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_CLASS,
+} from "~/components/profile/fields";
+import InlineConfirm from "~/components/InlineConfirm";
+import {
+  Rating,
+  RatingTargetType,
+  useDeleteRating,
+  useSubmitRating,
+} from "~/app/api/ratings";
 
 const StarPicker = ({
   value,
@@ -107,8 +116,21 @@ const RatingForm = ({
   );
   const [hydratedFrom, setHydratedFrom] = useState<string | null>(null);
 
-  // existing arrives after mount via react-query — fill once when it lands.
+  const remove = useDeleteRating();
+
+  // existing arrives after mount via react-query — fill once when it lands. When it goes back to
+  // null (the rating was deleted), clear the form.
   useEffect(() => {
+    if (existing === null && hydratedFrom !== null) {
+      setStars(0);
+      setComment("");
+      setWishIKnew("");
+      setWorkload(null);
+      setGradingFairness(null);
+      setTransparency(null);
+      setHydratedFrom(null);
+      return;
+    }
     if (!existing) return;
     const key = `${existing.targetType}:${existing.targetID}:${existing.updatedAt ?? existing.stars}`;
     if (hydratedFrom === key) return;
@@ -172,30 +194,50 @@ const RatingForm = ({
           Pick a star rating to submit.
         </div>
       )}
-      <button
-        type="button"
-        disabled={stars === 0 || submit.isPending}
-        onClick={() =>
-          submit.mutate({
-            targetType,
-            targetID,
-            stars,
-            comment: comment.trim() || null,
-            wishIKnew:
-              targetType === "COURSE" ? wishIKnew.trim() || null : null,
-            workload: targetType === "COURSE" ? workload : null,
-            gradingFairness,
-            transparency,
-          })
-        }
-        className={PRIMARY_BUTTON_CLASS}
-      >
-        {submit.isPending
-          ? "Saving..."
-          : existing
-            ? "Update rating"
-            : "Submit rating"}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={stars === 0 || submit.isPending}
+          onClick={() =>
+            submit.mutate({
+              targetType,
+              targetID,
+              stars,
+              comment: comment.trim() || null,
+              wishIKnew:
+                targetType === "COURSE" ? wishIKnew.trim() || null : null,
+              workload: targetType === "COURSE" ? workload : null,
+              gradingFairness,
+              transparency,
+            })
+          }
+          className={PRIMARY_BUTTON_CLASS}
+        >
+          {submit.isPending
+            ? "Saving..."
+            : existing
+              ? "Update rating"
+              : "Submit rating"}
+        </button>
+        {existing && (
+          <InlineConfirm
+            question="Delete your rating?"
+            confirmLabel="Delete"
+            disabled={remove.isPending}
+            onConfirm={() => remove.mutate({ targetType, targetID })}
+            trigger={(open) => (
+              <button
+                type="button"
+                className={SECONDARY_BUTTON_CLASS}
+                disabled={remove.isPending}
+                onClick={open}
+              >
+                Delete my rating
+              </button>
+            )}
+          />
+        )}
+      </div>
     </div>
   );
 };

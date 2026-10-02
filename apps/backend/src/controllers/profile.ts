@@ -94,6 +94,8 @@ const toProfile = (doc: ProfileDoc): Profile => ({
         matchGoals: doc.savedFilters.matchGoals,
       }
     : null,
+  // Absent on profiles saved before Saved moved to the account.
+  savedCourses: doc.savedCourses ?? [],
   onboardedAt: doc.onboardedAt?.toISOString() ?? null,
   updatedAt: doc.updatedAt.toISOString(),
 });

@@ -85,10 +85,13 @@ const DEFAULT_MAX_CANDIDATES = 3;
 const BEAM_WIDTH = 200;
 const DIVERSITY_THRESHOLD = 0.7;
 
-const AVAILABILITY_WEIGHT = 0.35;
-const WORKLOAD_WEIGHT = 0.25;
-const CAREER_WEIGHT = 0.2;
-const PREFERENCE_WEIGHT = 0.2;
+/** How much each part counts toward a candidate's totalScore. Sums to 1; the UI shows these. */
+export const SCORE_WEIGHTS = { availability: 0.35, workload: 0.25, career: 0.2, preference: 0.2 } as const;
+
+const AVAILABILITY_WEIGHT = SCORE_WEIGHTS.availability;
+const WORKLOAD_WEIGHT = SCORE_WEIGHTS.workload;
+const CAREER_WEIGHT = SCORE_WEIGHTS.career;
+const PREFERENCE_WEIGHT = SCORE_WEIGHTS.preference;
 
 const FIT_SCORE: Record<"FITS" | "CONFLICTS" | "UNKNOWN", number> = { FITS: 100, UNKNOWN: 50, CONFLICTS: 0 };
 

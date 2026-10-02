@@ -128,6 +128,9 @@ export const userSlice = createSlice({
     setSelectedTags: (state, action: PayloadAction<string[]>) => {
       state.selectedTags = action.payload;
     },
+    setScheduleView: (state, action: PayloadAction<string>) => {
+      state.scheduleView = action.payload;
+    },
     toggleScheduleView: (state) => {
       state.scheduleView =
         state.scheduleView === CAL_VIEW ? SCHED_VIEW : CAL_VIEW;

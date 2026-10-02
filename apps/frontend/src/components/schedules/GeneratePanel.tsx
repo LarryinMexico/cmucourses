@@ -29,6 +29,9 @@ import {
   PRIMARY_BUTTON_CLASS,
 } from "~/components/profile/fields";
 import { planApply } from "~/app/planApply";
+import { useSavedCourses } from "~/app/savedCourses";
+import { userSlice } from "~/app/user";
+import { CAL_VIEW } from "~/app/constants";
 import CandidateCard, { sameRef } from "./CandidateCard";
 
 const describeRef = (ref: SectionRef) =>
@@ -59,7 +62,7 @@ const GeneratePanel = () => {
   const generatedMeta = useAppSelector(selectActiveUserSchedule)?.generated;
   const [appliedIndex, setAppliedIndex] = useState<number | null>(null);
   const { data: profile } = useFetchProfile();
-  const saved = useAppSelector((state) => state.user.bookmarked);
+  const { saved } = useSavedCourses();
   const [includeSaved, setIncludeSaved] = useState(false);
   const [includePlanned, setIncludePlanned] = useState(false);
   const [candidates, setCandidates] = useState<ScheduleCandidate[] | null>(
@@ -124,15 +127,17 @@ const GeneratePanel = () => {
     setExcluded((prev) => prev.filter((ref) => kept.has(ref.courseID)));
   }, [scheduledKey]);
 
-  const generate = () => {
+  const generate = (
+    override: { locks?: SectionRef[]; excluded?: SectionRef[] } = {}
+  ) => {
     const input = buildGeneratorInput(
       scheduled,
       [...courseDetails, ...poolDetails],
       selectedSession,
       profile ?? emptyProfile(),
       {
-        locks,
-        excluded,
+        locks: override.locks ?? locks,
+        excluded: override.excluded ?? excluded,
         maxCandidates,
         poolIDs: pool.ids,
         unitsRange: unitsRange ?? undefined,
@@ -142,20 +147,36 @@ const GeneratePanel = () => {
     setAppliedIndex(null);
   };
 
+  // Once options are showing, a lock or exclusion reruns the generator right away.
+  const refine = (nextLocks: SectionRef[], nextExcluded: SectionRef[]) => {
+    setLocks(nextLocks);
+    setExcluded(nextExcluded);
+    if (candidates !== null)
+      generate({ locks: nextLocks, excluded: nextExcluded });
+  };
+
   // One lock per course: locking another pick of the same course replaces the first.
   const toggleLock = (ref: SectionRef) =>
-    setLocks((prev) =>
-      prev.some((lock) => sameRef(lock, ref))
-        ? prev.filter((lock) => !sameRef(lock, ref))
-        : [...prev.filter((lock) => lock.courseID !== ref.courseID), ref]
+    refine(
+      locks.some((lock) => sameRef(lock, ref))
+        ? locks.filter((lock) => !sameRef(lock, ref))
+        : [...locks.filter((lock) => lock.courseID !== ref.courseID), ref],
+      excluded
     );
 
-  const exclude = (ref: SectionRef) => {
-    setLocks((prev) => prev.filter((lock) => !sameRef(lock, ref)));
-    setExcluded((prev) =>
-      prev.some((item) => sameRef(item, ref)) ? prev : [...prev, ref]
+  const exclude = (ref: SectionRef) =>
+    refine(
+      locks.filter((lock) => !sameRef(lock, ref)),
+      excluded.some((item) => sameRef(item, ref))
+        ? excluded
+        : [...excluded, ref]
     );
-  };
+
+  const unexclude = (ref: SectionRef) =>
+    refine(
+      locks,
+      excluded.filter((item) => !sameRef(item, ref))
+    );
 
   const applyCandidate = (candidate: ScheduleCandidate, index: number) => {
     // Pool courses the candidate chose are not in the schedule yet; give them an entry to fill.
@@ -194,6 +215,8 @@ const GeneratePanel = () => {
     );
     setAppliedIndex(index);
     setAppliedAdds(plan.addCourses);
+    // Show the result: switch the main area to the week calendar.
+    dispatch(userSlice.actions.setScheduleView(CAL_VIEW));
   };
 
   const unitsInvalid =
@@ -297,11 +320,8 @@ const GeneratePanel = () => {
                 <Pill
                   key={`exclude-${describeRef(ref)}`}
                   label={`Never ${describeRef(ref)}`}
-                  onRemove={() =>
-                    setExcluded((prev) =>
-                      prev.filter((item) => !sameRef(item, ref))
-                    )
-                  }
+                  tone="red"
+                  onRemove={() => unexclude(ref)}
                 />
               ))}
             </div>
@@ -309,7 +329,7 @@ const GeneratePanel = () => {
           <button
             type="button"
             className={`${PRIMARY_BUTTON_CLASS} w-full`}
-            onClick={generate}
+            onClick={() => generate()}
             disabled={loading || failed.length > 0 || unitsInvalid}
           >
             {loading

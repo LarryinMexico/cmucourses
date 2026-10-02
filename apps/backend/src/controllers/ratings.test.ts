@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { fakeDb, resetFakeDb } from "../test/fakeDb";
 import { call } from "../test/http";
-import { submitRating } from "./ratings";
+import { deleteRating, submitRating } from "./ratings";
 
 beforeEach(resetFakeDb);
 
@@ -31,7 +31,7 @@ describe("submitRating: aggregate answers", () => {
 
   test("an instructor rating never keeps workload, because that is a question about a course", async () => {
     fakeDb.profiles!.findUnique!.mockResolvedValue(takenProfile as never);
-    fakeDb.schedules!.findFirst!.mockResolvedValue({ courseID: "15-122" } as never);
+    fakeDb.schedules!.findMany!.mockResolvedValue([{ instructors: ["Jane Doe"] }] as never);
     const { status } = await submit({
       targetType: "INSTRUCTOR",
       targetID: "Jane Doe",
@@ -65,12 +65,41 @@ describe("submitRating: gating (unchanged, previously untested)", () => {
 
   test("403 for an instructor who taught none of your taken courses", async () => {
     fakeDb.profiles!.findUnique!.mockResolvedValue(takenProfile as never);
-    fakeDb.schedules!.findFirst!.mockResolvedValue(null as never);
+    fakeDb.schedules!.findMany!.mockResolvedValue([{ instructors: ["Someone Else"] }] as never);
     expect((await submit({ targetType: "INSTRUCTOR", targetID: "Jane Doe", stars: 4 })).status).toBe(403);
   });
 
   test("403 without a profile", async () => {
     fakeDb.profiles!.findUnique!.mockResolvedValue(null as never);
     expect((await submit({ targetType: "COURSE", targetID: "15-122", stars: 4 })).status).toBe(403);
+  });
+});
+
+describe("instructor names differ in case across the catalog", () => {
+  test("a lower-case name matches a mixed-case schedule entry and is stored upper-cased", async () => {
+    fakeDb.profiles!.findUnique!.mockResolvedValue(takenProfile as never);
+    fakeDb.schedules!.findMany!.mockResolvedValue([{ instructors: ["Steier, David"] }] as never);
+    const { status } = await submit({ targetType: "INSTRUCTOR", targetID: "steier, david", stars: 4 });
+    expect(status).toBe(200);
+    expect(upsertArgs().create).toMatchObject({ targetID: "STEIER, DAVID" });
+  });
+});
+
+describe("deleteRating", () => {
+  const remove = (body: Record<string, unknown>) => call(deleteRating as never, "user_me", body);
+
+  test("deletes only the caller's own rating, under the normalized target", async () => {
+    fakeDb.ratings!.deleteMany!.mockResolvedValue({ count: 1 } as never);
+    const { status, body } = await remove({ targetType: "INSTRUCTOR", targetID: "Steier, David" });
+    expect(status).toBe(200);
+    expect(body).toEqual({ deleted: 1 });
+    expect(fakeDb.ratings!.deleteMany!.mock.calls[0]![0]).toEqual({
+      where: { clerkUserId: "user_me", targetType: "INSTRUCTOR", targetID: "STEIER, DAVID" },
+    });
+  });
+
+  test("400 for an unknown target type, and nothing is deleted", async () => {
+    expect((await remove({ targetType: "PROFESSOR", targetID: "x" })).status).toBe(400);
+    expect(fakeDb.ratings!.deleteMany!.mock.calls).toHaveLength(0);
   });
 });

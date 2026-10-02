@@ -1,30 +1,9 @@
-import React, { useState } from "react";
-import { isEqual } from "lodash-es";
+import React from "react";
 import { GlobeAltIcon, LockClosedIcon } from "@heroicons/react/24/outline";
-import {
-  Profile,
-  ProfilePatchInput,
-  profilePatchSchema,
-  ShareableSection,
-  Visibility,
-} from "@cmucourses/profile";
+import { ShareableSection, Visibility } from "@cmucourses/profile";
 import { Card } from "~/components/Card";
-import { useUpdateProfile } from "~/app/api/profile";
-import { PRIMARY_BUTTON_CLASS, Select } from "./fields";
-
-/**
- * Local edits of one saved value. When the saved value changes (a save elsewhere, a refetch)
- * and there are no unsaved edits, the draft follows it.
- */
-export function useDraft<T>(saved: T) {
-  const [draft, setDraft] = useState(saved);
-  const [base, setBase] = useState(saved);
-  if (!isEqual(saved, base)) {
-    if (isEqual(draft, base)) setDraft(saved);
-    setBase(saved);
-  }
-  return { draft, setDraft, dirty: !isEqual(draft, saved) };
-}
+import { Select } from "./fields";
+import { useProfileDraft } from "./ProfileDraftContext";
 
 /** A profile section, or the setting for whether Circles posts show what busy times are for. */
 type ToggleableVisibility = ShareableSection | "busyLabels";
@@ -34,18 +13,17 @@ const VISIBILITY_OPTIONS: { value: Visibility; label: string }[] = [
   { value: "PUBLIC", label: "Public" },
 ];
 
+/** A Private/Public switch. It edits the page draft; nothing is written until Save all. */
 export const VisibilityToggle = ({
-  profile,
   section,
   label,
 }: {
-  profile: Profile;
   section: ToggleableVisibility;
   /** Shown before the switch and used as its accessible name. */
   label?: string;
 }) => {
-  const update = useUpdateProfile();
-  const value = profile.visibility[section];
+  const { draft, update } = useProfileDraft();
+  const value = draft.visibility[section];
   const Icon = value === "PUBLIC" ? GlobeAltIcon : LockClosedIcon;
 
   return (
@@ -59,9 +37,7 @@ export const VisibilityToggle = ({
         value={value}
         options={VISIBILITY_OPTIONS}
         onChange={(next) =>
-          update.mutate({
-            visibility: { ...profile.visibility, [section]: next },
-          })
+          update("visibility", { ...draft.visibility, [section]: next })
         }
       />
     </div>
@@ -86,15 +62,10 @@ type Props = {
   id: string;
   title: string;
   description?: string;
-  profile: Profile;
   /** Which visibility setting the Public/Private switch in the header controls. */
   shareable?: ToggleableVisibility;
   /** The fixed badge shown when there is no switch. Defaults to "private". */
   headerBadge?: "private" | "public" | "none";
-  dirty: boolean;
-  /** The sections to save when the user clicks Save. */
-  patch: ProfilePatchInput;
-  onSaved?: () => void;
   children: React.ReactNode;
 };
 
@@ -102,26 +73,12 @@ export const ProfileSection = ({
   id,
   title,
   description,
-  profile,
   shareable,
   headerBadge = "private",
-  dirty,
-  patch,
-  onSaved,
   children,
 }: Props) => {
-  const update = useUpdateProfile();
-  const [error, setError] = useState<string | null>(null);
-
-  const save = () => {
-    const parsed = profilePatchSchema.safeParse(patch);
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Please check this section.");
-      return;
-    }
-    setError(null);
-    update.mutate(patch, { onSuccess: onSaved });
-  };
+  // Saving happens once for the whole page (ProfileSaveBar); a card only shows its own errors.
+  const error = useProfileDraft().errors[id];
 
   return (
     <div id={id} className="scroll-mt-6">
@@ -135,7 +92,7 @@ export const ProfileSection = ({
           </div>
           <div className="shrink-0">
             {shareable ? (
-              <VisibilityToggle profile={profile} section={shareable} />
+              <VisibilityToggle section={shareable} />
             ) : headerBadge === "public" ? (
               <AlwaysPublic />
             ) : headerBadge === "private" ? (
@@ -144,17 +101,7 @@ export const ProfileSection = ({
           </div>
         </div>
         <div className="mt-4 space-y-4">{children}</div>
-        <div className="mt-4 flex items-center justify-end gap-3">
-          {error && <div className="text-red-600 text-sm">{error}</div>}
-          <button
-            type="button"
-            className={PRIMARY_BUTTON_CLASS}
-            disabled={!dirty || update.isPending}
-            onClick={save}
-          >
-            {update.isPending ? "Saving..." : "Save"}
-          </button>
-        </div>
+        {error && <div className="mt-4 text-red-600 text-sm">{error}</div>}
       </Card>
     </div>
   );
