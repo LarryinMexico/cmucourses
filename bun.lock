@@ -37,6 +37,7 @@
         "morgan": "^1.10.0",
         "node": "^22.13.1",
         "node-cron": "^3.0.3",
+        "zod": "^3.25.76",
       },
       "devDependencies": {
         "@eslint/eslintrc": "^3.2.0",

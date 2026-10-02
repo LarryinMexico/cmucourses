@@ -1,4 +1,5 @@
 import type { Prisma } from "@cmucourses/db";
+import { z } from "zod";
 
 export type SummerSession = "summer one" | "summer two" | "summer all";
 const SUMMER_SESSIONS: readonly string[] = ["summer one", "summer two", "summer all"];
@@ -270,3 +271,43 @@ export const fitAvailabilityStage = (busy: BusyBlockFilter[], sessions: SessionF
 export const courseIDsInKeywords = (keywords: string): string[] => [
   ...new Set([...keywords.matchAll(/(?<!\d)(\d{2})-?(\d{3})(?!\d)/g)].map(([, dept, num]) => `${dept}-${num}`)),
 ];
+
+const intString = (min: number, max: number) =>
+  z
+    .string()
+    .regex(/^\d{1,5}$/, "Expected a whole number")
+    .refine((value) => Number(value) >= min && Number(value) <= max, `Expected ${min}-${max}`);
+
+/** A repeatable query parameter: one string or a capped list of them, never an object (qs `a[b]=`). */
+const stringOrList = <T extends z.ZodTypeAny>(item: T, max: number) => z.union([item, z.array(item).max(max)]);
+
+const boolLiteral = z.enum(["true", "false"]);
+
+/**
+ * Every `/courses/search` query parameter. Values reach a MongoDB pipeline (`levels` becomes part
+ * of a regex), so anything outside these shapes is a 400, not a silently odd query. Unknown keys
+ * are stripped so older clients keep working. Value-level parsing of `session` and `busy` stays in
+ * parseSessions / parseBusyBlocks, which drop entries they cannot honour.
+ */
+export const searchQuerySchema = z.object({
+  page: intString(1, 100000).optional(),
+  pageSize: intString(1, 100000).optional(),
+  department: stringOrList(z.string().max(100), 200).optional(),
+  keywords: z.string().max(200).optional(),
+  unitsMin: intString(0, 99).optional(),
+  unitsMax: intString(0, 99).optional(),
+  schedules: boolLiteral.optional(),
+  levels: z
+    .string()
+    .regex(/^[0-9]{1,10}$/, "Levels are digits 0-9")
+    .optional(),
+  session: stringOrList(z.string().max(200), 50).optional(),
+  classTimes: stringOrList(z.enum(["morning", "afternoon", "evening", "tba"]), 4).optional(),
+  meetingDays: stringOrList(z.string().regex(/^[0-6]$/, "Days are 0-6"), 7).optional(),
+  timeBegin: intString(0, 1440).optional(),
+  timeEnd: intString(0, 1440).optional(),
+  busy: stringOrList(z.string().max(30), MAX_BUSY_BLOCKS).optional(),
+  fces: boolLiteral.optional(),
+});
+
+export type SearchQuery = z.output<typeof searchQuerySchema>;

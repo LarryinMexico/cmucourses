@@ -16,6 +16,7 @@ import {
   fitAvailabilityStage,
   parseBusyBlocks,
   parseSessions,
+  searchQuerySchema,
   sessionMatchesExpr,
   timedEntries,
 } from "./courseQuery";
@@ -152,6 +153,13 @@ export const getFilteredCourses: RequestHandler<
   GetFilteredCourses["reqBody"],
   GetFilteredCourses["query"]
 > = async (req, res, next) => {
+  const parsed = searchQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid search parameters", issues: parsed.error.issues });
+    return;
+  }
+  const query = parsed.data;
+
   // raw query, because prisma doesn't support full-text search for mongodb yet
 
   const pipeline: Prisma.InputJsonValue[] = [];
@@ -160,9 +168,9 @@ export const getFilteredCourses: RequestHandler<
   const sortKeys: [string, unknown][] = [];
   const addedFields: Record<string, unknown> = {};
 
-  if (req.query.keywords !== undefined) {
-    matchStage.$text = { $search: req.query.keywords };
-    const exactIDs = courseIDsInKeywords(req.query.keywords);
+  if (query.keywords !== undefined) {
+    matchStage.$text = { $search: query.keywords };
+    const exactIDs = courseIDsInKeywords(query.keywords);
     if (exactIDs.length > 0) {
       addedFields.exactMatch = { $in: ["$courseID", exactIDs] };
       sortKeys.push(["exactMatch", -1]);
@@ -171,19 +179,19 @@ export const getFilteredCourses: RequestHandler<
     addedFields.relevance = { $meta: "textScore" };
   }
 
-  if (req.query.department !== undefined) {
-    matchStage.department = { $in: singleToArray(req.query.department) };
+  if (query.department !== undefined) {
+    matchStage.department = { $in: singleToArray(query.department) };
   }
 
-  if (req.query.levels !== undefined && req.query.levels.length > 0) {
-    const levelRange = req.query.levels;
+  if (query.levels !== undefined && query.levels.length > 0) {
+    const levelRange = query.levels;
     matchStage.courseID = { $regex: `\\d\\d-[${levelRange}]\\d\\d` };
   }
 
   pipeline.push({ $match: matchStage } as Prisma.InputJsonValue);
 
-  const unitsMin = req.query.unitsMin === undefined ? undefined : parseInt(req.query.unitsMin);
-  const unitsMax = req.query.unitsMax === undefined ? undefined : parseInt(req.query.unitsMax);
+  const unitsMin = query.unitsMin === undefined ? undefined : parseInt(query.unitsMin);
+  const unitsMax = query.unitsMax === undefined ? undefined : parseInt(query.unitsMax);
 
   if (unitsMin !== undefined || unitsMax !== undefined) {
     pipeline.push({
@@ -209,26 +217,26 @@ export const getFilteredCourses: RequestHandler<
     });
   }
 
-  const sessions = req.query.session === undefined ? [] : parseSessions(singleToArray(req.query.session));
+  const sessions = query.session === undefined ? [] : parseSessions(singleToArray(query.session));
 
-  const busyBlocks = req.query.busy === undefined ? [] : parseBusyBlocks(singleToArray(req.query.busy));
+  const busyBlocks = query.busy === undefined ? [] : parseBusyBlocks(singleToArray(query.busy));
 
   const classTimes =
-    req.query.classTimes === undefined
+    query.classTimes === undefined
       ? []
-      : singleToArray(req.query.classTimes).filter(isClassTime);
+      : singleToArray(query.classTimes).filter(isClassTime);
 
   const meetingDays =
-    req.query.meetingDays === undefined
+    query.meetingDays === undefined
       ? []
-      : singleToArray(req.query.meetingDays)
+      : singleToArray(query.meetingDays)
           .map((day) => parseInt(day, 10))
           .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
 
   const timeBegin =
-    req.query.timeBegin === undefined ? undefined : parseInt(req.query.timeBegin, 10);
+    query.timeBegin === undefined ? undefined : parseInt(query.timeBegin, 10);
   const timeEnd =
-    req.query.timeEnd === undefined ? undefined : parseInt(req.query.timeEnd, 10);
+    query.timeEnd === undefined ? undefined : parseInt(query.timeEnd, 10);
   const hasTimeWindow =
     timeBegin !== undefined &&
     timeEnd !== undefined &&
@@ -236,7 +244,7 @@ export const getFilteredCourses: RequestHandler<
     !Number.isNaN(timeEnd);
 
   const needsScheduleLookup =
-    fromBoolLiteral(req.query.schedules) ||
+    fromBoolLiteral(query.schedules) ||
     sessions.length > 0 ||
     classTimes.length > 0 ||
     meetingDays.length > 0 ||
@@ -450,8 +458,8 @@ export const getFilteredCourses: RequestHandler<
     pipeline.push({ $sort: sortOptions as Prisma.InputJsonValue });
   }
 
-  const page = parseOptionalInt(req.query.page, 1);
-  const pageSize = Math.min(parseOptionalInt(req.query.pageSize, MAX_LIMIT), MAX_LIMIT);
+  const page = parseOptionalInt(query.page, 1);
+  const pageSize = Math.min(parseOptionalInt(query.pageSize, MAX_LIMIT), MAX_LIMIT);
 
   pipeline.push({
     $facet: {
