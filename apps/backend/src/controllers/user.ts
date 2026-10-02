@@ -2,7 +2,36 @@ import { NextFunction, Request, Response } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { clerkClient } from "@clerk/clerk-sdk-node";
 
-const verifyUserToken = async (token: string): Promise<JwtPayload> => {
+/** How long a "has a CMU email" answer from Clerk is reused, and how many users are remembered. */
+export const CMU_EMAIL_CACHE_TTL_MS = 5 * 60_000;
+const CMU_EMAIL_CACHE_MAX = 5000;
+const cmuEmailCache = new Map<string, { hasCmuEmail: boolean; expires: number }>();
+
+export const resetCmuEmailCache = () => cmuEmailCache.clear();
+
+/**
+ * Whether the Clerk user has a CMU address. Every authenticated request in prod asks this, and
+ * Clerk's Backend API allows 1000 requests per 10s for the whole app, so the answer is cached per
+ * user for a few minutes. A Clerk failure is not cached.
+ */
+const hasCmuEmail = async (sub: string): Promise<boolean> => {
+  const now = Date.now();
+  const cached = cmuEmailCache.get(sub);
+  if (cached && cached.expires > now) return cached.hasCmuEmail;
+
+  const user = await clerkClient.users.getUser(sub);
+  const result = user.emailAddresses.some(({ emailAddress }) => /@(andrew\.)?cmu\.edu$/i.test(emailAddress));
+
+  cmuEmailCache.delete(sub);
+  if (cmuEmailCache.size >= CMU_EMAIL_CACHE_MAX) {
+    const oldest = cmuEmailCache.keys().next().value;
+    if (oldest !== undefined) cmuEmailCache.delete(oldest);
+  }
+  cmuEmailCache.set(sub, { hasCmuEmail: result, expires: now + CMU_EMAIL_CACHE_TTL_MS });
+  return result;
+};
+
+export const verifyUserToken = async (token: string): Promise<JwtPayload> => {
   const pubkey = process.env.CLERK_PEM_KEY || "";
 
   const payload = jwt.verify(token, pubkey, {
@@ -27,9 +56,7 @@ const verifyUserToken = async (token: string): Promise<JwtPayload> => {
     process.env.REQUIRE_CMU_EMAIL === "true" || (BACKEND_ENV === "prod" && process.env.REQUIRE_CMU_EMAIL !== "false");
   if (requireCmuAccount) {
     if (!payload.sub) throw "Token has no subject.";
-    const user = await clerkClient.users.getUser(payload.sub);
-    const hasCmuEmail = user.emailAddresses.some(({ emailAddress }) => /@(andrew\.)?cmu\.edu$/i.test(emailAddress));
-    if (!hasCmuEmail) throw "A CMU email account is required.";
+    if (!(await hasCmuEmail(payload.sub))) throw "A CMU email account is required.";
   }
 
   return payload;
