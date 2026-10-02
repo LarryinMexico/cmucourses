@@ -1,17 +1,8 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
 
-export default clerkMiddleware((auth, req) => {
-  // Check if this is a post-authentication redirect
-  if (
-    req.nextUrl.pathname === "/" &&
-    req.nextUrl.searchParams.has("__clerk_status")
-  ) {
-    return NextResponse.redirect(
-      new URL("https://courses.scottylabs.org", req.url)
-    );
-  }
-});
+// Clerk finishes sign-in on this site. (The ScottyLabs original redirected `/?__clerk_status=`
+// to courses.scottylabs.org, which sent our users to someone else's deployment.)
+export default clerkMiddleware();
 
 export const config = {
   matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
