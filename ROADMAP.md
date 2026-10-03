@@ -196,7 +196,7 @@ Details:
 - **Backend tests** (`bun test` in `apps/backend`, 72) mock the database, so they prove what a handler asks for, not that MongoDB accepts it; every query added this round was also run against a real local replica set, which found two bugs a mock cannot (Prisma's `readAt: null` does not match a missing field, so unread counts were always 0). Not covered by any automated test: the search aggregation itself (verified by comparison against the client, not in CI) and FCE. Token verification has tests since 2026-10-02.
 - Messages are polled, not pushed. Conversation lists scan the latest 1,000 messages, threads show the latest 100, comments the latest 200, the directory the first 100 profiles.
 - The semester plan checks units only, not hours per week; requirements exist for MISM only; the generator pool holds at most 12 courses.
-- Modality and mini filters are not applicable until the catalog carries those fields.
+- Modality and mini filters will not be built (decided 2026-10-03): the catalog data does not exist.
 
 ## Still needs a browser check
 

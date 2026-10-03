@@ -8,6 +8,13 @@ CMU Courses (ScottyLabs Course Tool) — a Next.js frontend + Express backend ov
 
 This fork adds per-user **Student Profiles** (career goals, academic background, busy times, course history) — the repo's first user data and first write path. See `ROADMAP.md` and `docs/superpowers/specs/2026-09-11-student-profile-design.md`.
 
+## Won't do: modality and mini filters
+
+Two Mural cards are permanently out of scope (decided 2026-10-03), because the data does not exist, not because the work is pending. Don't build either, and don't list them as done:
+
+- **Modality filter (in person / online / hybrid).** The catalog has no modality field, and the only proxies (building, room, location) are empty on every 2026 meeting (`node scripts/catalog/measure-modality.mjs`; numbers in `ROADMAP.md`). `profile.modality` stays stored and editable but has no effect; the Profile says so, and the generator's `inferredModality` returns null for current terms.
+- **Mini semester filter (Mini 1-4).** Fall and spring schedule documents carry no `session` value, so a mini cannot be told from a full semester. Only summer sub-sessions exist, and those are filterable.
+
 ## Commands
 
 Run from the repo root (Bun 1.2.3 is the package manager; do not use npm/yarn/pnpm):
