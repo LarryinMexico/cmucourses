@@ -10,8 +10,11 @@ import { ipKeyGenerator, rateLimit } from "express-rate-limit";
  */
 export const LIMITS = {
   windowMs: 60_000,
-  /** Every route, per client IP. */
-  public: 300,
+  /**
+   * Every route, per client IP. Generous on purpose: a room of students behind one campus NAT
+   * shares a single IP, and a demo full of them must not trip it. It stops scripted floods.
+   */
+  public: 1000,
   /**
    * Routes that verify a token, per user (or per IP when the token has no readable subject).
    * Polling alone (open thread every 5s, conversation list every 15s, feed head every 30s) is
