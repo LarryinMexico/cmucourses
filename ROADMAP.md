@@ -175,7 +175,7 @@ Branch `fix/mural-round-2026-10`, one commit per item.
 | --- | --- | --- |
 | Rate limiting (tech debt) | Done | Unit tests (per-user keys, cache TTL); curl loop on a local backend: at the then-limit of 300, request 301 → 429 with `Retry-After` (since raised to 1000, see below); in the browser the "Too many requests" message shows. **Not checked on the deployment**: assumes one instance and one proxy hop |
 | Course filter input validation (tech debt) | Done | 34 unit tests (malicious inputs, every parameter shape the frontend sends); 12 frontend query shapes against the local catalog return the same `totalDocs` and first results as `main`; malicious inputs → 400 |
-| SSO failure handling (tech debt) | Done for the agreed cases (missing / expired / not-yet-valid token) | 23 unit tests with real RS256 tokens; curl shows the new `{ error, code }` 401s; browser: with a wrong `CLERK_PEM_KEY` the Profile shows the reason at once. The "Sign in again" button was changed after that check (below) and its new sign-out step is not browser-tested |
+| SSO failure handling (tech debt) | Done for the agreed cases (missing / expired / not-yet-valid token) | 23 unit tests with real RS256 tokens; curl shows the new `{ error, code }` 401s; browser: with a wrong `CLERK_PEM_KEY` the Profile shows the reason at once. "Sign in again" signs out, then opens sign-in (browser, 2026-10-06) |
 | Remove ScottyLabs redirect | Done | `GET /?__clerk_status=verified` answers 200, no redirect; browser: sign out and back in stays on the site |
 | Detect time conflicts | Done | 8 jest + 5 profile tests; **browser-checked** on /schedules (count, "Conflicts with …" lines, "(conflicts)" options; nothing blocked) |
 | Share planned / actual | Done | Unit tests; local replica set: `main` schema + old posts → migration → `db push` → both kinds coexist, re-share replaces, kind filter. **Atlas**: 19 posts migrated to ACTUAL, index `circlePosts_authorUserId_semester_year_kind_key`; browser: old posts show Actual, Planned and Actual coexist |
@@ -187,7 +187,7 @@ Details:
 - **Search validation.** `/courses/search` runs every query parameter through `searchQuerySchema` (`apps/backend/src/controllers/courseQuery.ts`); invalid input is a 400 with `issues`, unknown keys are ignored. Before this, `levels` went into a MongoDB regex unescaped, `levels[$ne]=1` reached the pipeline as an operator, and `?page=abc` **crashed the whole backend process** (the parse threw outside the `try`).
 - **Rate limits** (`apps/backend/src/rateLimit.ts`): every route 1000 requests/min per IP (raised from 300 before the demo: a room of students behind one campus NAT shares an IP); routes that verify a token 120/min per user (token subject, else IP). The plan said 60, but polling alone (thread 5s, conversations 15s, feed head 30s) is ~18/min per tab and tabs share the budget. Counters are in memory, so per instance. Sign-in itself is Clerk's: 3 attempts per 10s per IP and a 1-hour lockout after 10 failures by default ([rate limits](https://clerk.com/docs/guides/how-clerk-works/system-limits), [user lockout](https://clerk.com/docs/guides/secure/user-lockout)). The CMU-email answer from Clerk is cached 5 minutes per user, because Clerk's Backend API allows 1000 requests/10s for the whole production app.
 - **Sign-in errors.** `verifyUserToken` throws `AuthError` with a code; both middlewares answer 401 `{ error, code }`. The old manual `exp`/`nbf` checks could never run (jsonwebtoken throws first) and `isUser` sent an Error that serialized to `{}`. The frontend no longer retries a 401/429 and shows the reason with "Sign in again" on Profile, Careers, Requirements, Circles (feed, people, share) and saved schedules. A Clerk outage is still a 401 (code `auth_service_error`), not a 503; azp mismatch and non-CMU accounts are tested but not changed.
-- **Fixed in the final review (2026-10-03):** "Sign in again" now signs the stale Clerk session out before opening sign-in. Clerk will not open sign-in while a session exists (single-session mode; in development it throws), and in this app the backend refuses tokens Clerk still holds. Verified by `tsc` and the production build only.
+- **Fixed in the final review (2026-10-03):** "Sign in again" now signs the stale Clerk session out before opening sign-in. Clerk will not open sign-in while a session exists (single-session mode; in development it throws), and in this app the backend refuses tokens Clerk still holds. Browser-checked 2026-10-06.
 - **Not done in this round:** other handlers may also throw outside a `try` and crash the process the way `/courses/search` did; not audited.
 
 ## Known limitations (2026-09-23)
@@ -198,6 +198,6 @@ Details:
 - The semester plan checks units only, not hours per week; requirements exist for MISM only; the generator pool holds at most 12 courses.
 - Modality and mini filters will not be built (decided 2026-10-03): the catalog data does not exist.
 
-## Still needs a browser check
+## Browser checks
 
-- "Sign in again" after a refused token: signs out, then opens the sign-in dialog (changed after the 2026-10-03 browser pass)
+Every item of the 2026-10-02 round has been checked in a signed-in browser; the last one, "Sign in again" (signs out, then opens sign-in), on 2026-10-06.
